@@ -12,6 +12,59 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require __DIR__ . '/vendor/autoload.php';
+use Dotenv\Dotenv;
+use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+
+// Load .env if present.
+if ( file_exists( __DIR__ . '/.env' ) ) {
+	$dotenv = Dotenv::createImmutable( __DIR__ );
+	$dotenv->safeLoad();
+}
+
+// Build the update checker so this plugin auto-updates from GitHub.
+$updateChecker = PucFactory::buildUpdateChecker(
+	'https://github.com/joelhmartin/Anchor-Chat-Widget/',
+	__FILE__,
+	'anchor-corps-chat-widget'
+);
+$updateChecker->setBranch( 'main' );
+
+// Auth token from environment, with fallbacks.
+$token = $_ENV['GITHUB_ACCESS_TOKEN']
+	?? getenv( 'GITHUB_ACCESS_TOKEN' )
+	?: ( defined( 'GITHUB_ACCESS_TOKEN' ) ? GITHUB_ACCESS_TOKEN : null );
+
+if ( $token ) {
+	$updateChecker->setAuthentication( $token );
+}
+
+// Prefer GitHub release assets when they exist.
+$vcs_api = method_exists( $updateChecker, 'getVcsApi' ) ? $updateChecker->getVcsApi() : null;
+if ( $vcs_api && method_exists( $vcs_api, 'enableReleaseAssets' ) ) {
+	$vcs_api->enableReleaseAssets();
+}
+
+// Optional: verbose logs when updating.
+add_filter(
+	'upgrader_pre_download',
+	function ( $reply, $package ) {
+		error_log( '[UPGRADER] pre_download package=' . $package );
+		return $reply;
+	},
+	10,
+	2
+);
+add_filter(
+	'upgrader_source_selection',
+	function ( $source ) {
+		error_log( '[UPGRADER] source_selection source=' . $source );
+		return $source;
+	},
+	10,
+	1
+);
+
 define( 'ACCW_PLUGIN_VERSION', '1.0.0' );
 define( 'ACCW_PLUGIN_FILE', __FILE__ );
 define( 'ACCW_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
