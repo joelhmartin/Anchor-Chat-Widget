@@ -71,12 +71,53 @@ define( 'ACCW_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ACCW_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
 /**
+ * Derive widget settings from environment variables and defaults.
+ *
+ * @return array<string,string>
+ */
+function accw_get_settings() {
+	static $settings = null;
+
+	if ( null !== $settings ) {
+		return $settings;
+	}
+
+	$settings = array(
+		'headerTitle'          => getenv( 'ACCW_HEADER_TITLE' ) ?: 'Chat with us',
+		'headerSubtitle'       => getenv( 'ACCW_HEADER_SUBTITLE' ) ?: 'We are here to help',
+		'helperText'           => getenv( 'ACCW_HELPER_TEXT' ) ?: 'Hi, how can we help?',
+		'apiUrl'               => getenv( 'ACCW_API_URL' ) ?: '',
+		'apiAuthToken'         => getenv( 'ACCW_API_AUTH_TOKEN' ) ?: '',
+		'forwardTranscriptUrl' => getenv( 'ACCW_FORWARD_TRANSCRIPT_URL' ) ?: '',
+		'clientId'             => getenv( 'ACCW_CLIENT_ID' ) ?: '',
+		'forwardToken'         => getenv( 'ACCW_FORWARD_TOKEN' ) ?: 'anchor_forward_token_v1',
+		'position'             => getenv( 'ACCW_POSITION' ) ?: 'bottom-right',
+		'ariaLabelOpen'        => 'Open chat',
+	);
+
+	$settings['headerTitle']    = apply_filters( 'accw_header_title', $settings['headerTitle'] );
+	$settings['headerSubtitle'] = apply_filters( 'accw_header_subtitle', $settings['headerSubtitle'] );
+	$settings['helperText']     = apply_filters( 'accw_helper_text', $settings['helperText'] );
+	$settings['ariaLabelOpen']  = apply_filters( 'accw_aria_label_open', $settings['ariaLabelOpen'] );
+
+	/**
+	 * Allow filtering the full settings array before it is passed into JS.
+	 *
+	 * @param array $settings
+	 */
+	$settings = apply_filters( 'accw_settings', $settings );
+
+	return $settings;
+}
+
+/**
  * Enqueue styles and scripts globally on the front end.
  */
 function accw_enqueue_assets() {
 	if ( is_admin() ) {
 		return;
 	}
+	$settings = accw_get_settings();
 	wp_enqueue_style(
 		'accw-chat-widget',
 		ACCW_PLUGIN_URL . 'assets/css/chat-widget.css',
@@ -92,14 +133,29 @@ function accw_enqueue_assets() {
 		true
 	);
 
-	// Pass a few tweakable strings through JS, in case a theme wants to filter.
+	// Pass tweakable strings to JS and expose the config for the widget logic.
 	$strings = array(
-		'helperText' => apply_filters( 'accw_helper_text', 'Hi, how can we help?' ),
-		'headerTitle' => apply_filters( 'accw_header_title', 'Chat with us' ),
-		'headerSubtitle' => apply_filters( 'accw_header_subtitle', "We're here to help!" ),
-		'ariaLabelOpen' => apply_filters( 'accw_aria_label_open', 'Open chat' ),
+		'helperText' => $settings['helperText'],
+		'headerTitle' => $settings['headerTitle'],
+		'headerSubtitle' => $settings['headerSubtitle'],
+		'ariaLabelOpen' => $settings['ariaLabelOpen'],
 	);
-	wp_add_inline_script( 'accw-chat-widget', 'window.ACCW_STRINGS = ' . wp_json_encode( $strings ) . ';', 'before' );
+
+	$config = array(
+		'headerTitle' => $settings['headerTitle'],
+		'headerSubtitle' => $settings['headerSubtitle'],
+		'helperText' => $settings['helperText'],
+		'apiUrl' => $settings['apiUrl'],
+		'apiAuthToken' => $settings['apiAuthToken'],
+		'forwardTranscriptUrl' => $settings['forwardTranscriptUrl'],
+		'clientId' => $settings['clientId'],
+		'forwardToken' => $settings['forwardToken'],
+		'position' => $settings['position'],
+	);
+
+	$inline = 'window.ACCW_STRINGS = ' . wp_json_encode( $strings ) . ';';
+	$inline .= 'window.ACCW_CONFIG = ' . wp_json_encode( $config ) . ';';
+	wp_add_inline_script( 'accw-chat-widget', $inline, 'before' );
 }
 add_action( 'wp_enqueue_scripts', 'accw_enqueue_assets', 5 );
 
@@ -110,6 +166,7 @@ function accw_render_widget() {
 	if ( is_admin() ) {
 		return;
 	}
+	$settings = accw_get_settings();
 
 	$logo_url = apply_filters(
 		'accw_logo_url',
@@ -121,7 +178,7 @@ function accw_render_widget() {
 	?>
 	<div class="chat-widget-container" id="accwContainer" aria-live="polite">
 		<div class="chat-helper" id="chatHelper"></div>
-		<button class="chat-button" id="chatToggle" aria-label="<?php echo esc_attr( apply_filters( 'accw_aria_label_open', 'Open chat' ) ); ?>">
+		<button class="chat-button" id="chatToggle" aria-label="<?php echo esc_attr( $settings['ariaLabelOpen'] ); ?>">
 			<svg class="chat-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
 				<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
 			</svg>
