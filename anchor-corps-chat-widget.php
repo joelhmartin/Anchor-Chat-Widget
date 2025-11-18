@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.0.3
+ * Version: 2.0.4
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -174,7 +174,14 @@ function accw_render_widget() {
 	);
 
 	// Render the shortcode output directly so it works inside the widget.
-	$chatbody = do_shortcode( '[anchor_chatbot]' );
+	if ( shortcode_exists( 'anchor_chatbot' ) ) {
+		$chatbody = do_shortcode( '[anchor_chatbot]' );
+	} else {
+		$chatbody = '';
+		if ( current_user_can( 'manage_options' ) ) {
+			$chatbody = '<div class="accw-chatbot-warning">' . esc_html__( 'Activate the plugin that registers [anchor_chatbot] or port that logic here.', 'anchor-corps-chat-widget' ) . '</div>';
+		}
+	}
 	?>
 	<div class="chat-widget-container" id="accwContainer" aria-live="polite">
 		<div class="chat-helper" id="chatHelper"></div>

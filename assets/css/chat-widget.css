@@ -133,6 +133,15 @@
     background: #f8f9fa;
 }
 
+.accw-chatbot-warning {
+    padding: 12px 14px;
+    font-size: 14px;
+    color: #663c00;
+    background: #fff8e5;
+    border: 1px solid #f6da9f;
+    border-radius: 8px;
+}
+
 @media (max-width: 480px) {
     .chat-window {
         width: calc(100vw - 40px);
