@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.0.4
+ * Version: 2.0.5
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -173,14 +173,9 @@ function accw_render_widget() {
 		'https://tmjsleepkc.com/wp-content/uploads/2025/09/Small_Logo_SVG_TMJ_INT@2x.webp'
 	);
 
-	// Render the shortcode output directly so it works inside the widget.
-	if ( shortcode_exists( 'anchor_chatbot' ) ) {
-		$chatbody = do_shortcode( '[anchor_chatbot]' );
-	} else {
-		$chatbody = '';
-		if ( current_user_can( 'manage_options' ) ) {
-			$chatbody = '<div class="accw-chatbot-warning">' . esc_html__( 'Activate the plugin that registers [anchor_chatbot] or port that logic here.', 'anchor-corps-chat-widget' ) . '</div>';
-		}
+	$chatbody = do_shortcode( '[anchor_chatbot]' );
+	if ( empty( $chatbody ) && current_user_can( 'manage_options' ) ) {
+		$chatbody = '<div class="accw-chatbot-warning">' . esc_html__( 'The [anchor_chatbot] shortcode did not output any markup. Verify the plugin is active.', 'anchor-corps-chat-widget' ) . '</div>';
 	}
 	?>
 	<div class="chat-widget-container" id="accwContainer" aria-live="polite">
@@ -214,6 +209,79 @@ function accw_render_widget() {
 	<?php
 }
 add_action( 'wp_footer', 'accw_render_widget', 100 );
+
+/**
+ * Register [anchor_chatbot] if nothing else has.
+ */
+function accw_register_shortcodes() {
+	if ( shortcode_exists( 'anchor_chatbot' ) ) {
+		return;
+	}
+
+	add_shortcode( 'anchor_chatbot', 'accw_render_chatbot_shortcode' );
+}
+add_action( 'init', 'accw_register_shortcodes' );
+
+/**
+ * Default [anchor_chatbot] implementation that renders the live chat UI.
+ *
+ * @param array<string,string> $atts
+ * @return string
+ */
+function accw_render_chatbot_shortcode( $atts = array() ) {
+	$settings = accw_get_settings();
+	$atts     = shortcode_atts(
+		array(
+			'intro' => $settings['helperText'],
+		),
+		$atts,
+		'anchor_chatbot'
+	);
+
+	if ( empty( $settings['apiUrl'] ) ) {
+		if ( current_user_can( 'manage_options' ) ) {
+			return '<div class="accw-chatbot-warning">' . esc_html__( 'Set ACCW_API_URL (Chatbot API URL) to enable the chat experience.', 'anchor-corps-chat-widget' ) . '</div>';
+		}
+		return '<div class="accw-chatbot-offline">' . esc_html__( 'Chat is unavailable right now.', 'anchor-corps-chat-widget' ) . '</div>';
+	}
+
+	$uid = uniqid( 'accw_', false );
+
+	ob_start();
+	?>
+	<div class="accw-chatbot" data-accw-chatbot="<?php echo esc_attr( $uid ); ?>" data-accw-intro="<?php echo esc_attr( $atts['intro'] ); ?>">
+		<div class="accw-chatbot__messages" data-accw-messages role="log" aria-live="polite" aria-busy="false"></div>
+		<div class="accw-chatbot__status" data-accw-status></div>
+		<form class="accw-chatbot__form" data-accw-form novalidate>
+			<label class="accw-visually-hidden" for="accwInput-<?php echo esc_attr( $uid ); ?>">
+				<?php esc_html_e( 'Type your message', 'anchor-corps-chat-widget' ); ?>
+			</label>
+			<textarea
+				id="accwInput-<?php echo esc_attr( $uid ); ?>"
+				class="accw-chatbot__input"
+				data-accw-input
+				rows="2"
+				placeholder="<?php echo esc_attr__( 'Ask us anything about your care...', 'anchor-corps-chat-widget' ); ?>"
+			></textarea>
+			<div class="accw-chatbot__actions">
+				<button type="submit" class="accw-btn accw-btn-primary" data-accw-send><?php esc_html_e( 'Send', 'anchor-corps-chat-widget' ); ?></button>
+				<button type="button" class="accw-btn accw-btn-secondary" data-accw-end><?php esc_html_e( 'End chat', 'anchor-corps-chat-widget' ); ?></button>
+			</div>
+		</form>
+	</div>
+	<?php
+
+	$output = ob_get_clean();
+
+	/**
+	 * Filter the rendered chatbot markup.
+	 *
+	 * @param string $output
+	 * @param array  $settings
+	 * @param array  $atts
+	 */
+	return apply_filters( 'accw_chatbot_markup', $output, $settings, $atts );
+}
 
 /**
  * Basic safe defaults for CSS variables in case the theme does not set them.
