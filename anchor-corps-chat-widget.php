@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.0.5
+ * Version: 2.0.6
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
