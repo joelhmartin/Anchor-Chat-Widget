@@ -15,8 +15,8 @@
 			return;
 		}
 
-		var payload = {
-			clientId: CFG.clientId || '',
+		// Build transcript object for Cloud Run
+		var transcript = {
 			sessionId: session.id,
 			startedAt: session.startedAt,
 			endedAt: new Date().toISOString(),
@@ -33,16 +33,17 @@
 			})
 		};
 
-		var url = CFG.forwardTranscriptUrl;
-		if (CFG.forwardToken) {
-			var sep = url.indexOf('?') === -1 ? '?' : '&';
-			url = url + sep + 'token=' + encodeURIComponent(CFG.forwardToken);
-		}
+		// Match Cloud Run TranscriptPayload: { transcript, clientId, token }
+		var payload = {
+			clientId: CFG.clientId || "",
+			token: CFG.forwardToken || "",
+			transcript: transcript
+		};
 
-		fetch(url, {
-			method: 'POST',
+		fetch(CFG.forwardTranscriptUrl, {
+			method: "POST",
 			headers: {
-				'Content-Type': 'application/json'
+				"Content-Type": "application/json"
 			},
 			body: JSON.stringify(payload)
 		}).catch(function () {
@@ -54,20 +55,20 @@
 	window.ACCW_forwardTranscript = forwardTranscript;
 
 	function initToggle() {
-		var chatToggle = byId('chatToggle');
-		var chatWindow = byId('chatWindow');
-		var chatHelper = byId('chatHelper');
-		var headerTitle = byId('accwHeaderTitle');
-		var headerSubtitle = byId('accwHeaderSubtitle');
+		var chatToggle = byId("chatToggle");
+		var chatWindow = byId("chatWindow");
+		var chatHelper = byId("chatHelper");
+		var headerTitle = byId("accwHeaderTitle");
+		var headerSubtitle = byId("accwHeaderSubtitle");
 
 		if (headerTitle) {
-			headerTitle.textContent = STR.headerTitle || CFG.headerTitle || 'Chat with us';
+			headerTitle.textContent = STR.headerTitle || CFG.headerTitle || "Chat with us";
 		}
 		if (headerSubtitle) {
 			headerSubtitle.textContent = STR.headerSubtitle || CFG.headerSubtitle || "We're here to help!";
 		}
 		if (chatHelper) {
-			chatHelper.textContent = STR.helperText || CFG.helperText || 'Hi, how can we help?';
+			chatHelper.textContent = STR.helperText || CFG.helperText || "Hi, how can we help?";
 		}
 
 		if (!chatToggle || !chatWindow) {
@@ -75,30 +76,30 @@
 		}
 
 		function openChat() {
-			chatWindow.classList.add('open');
-			chatToggle.classList.add('active');
-			chatToggle.setAttribute('aria-expanded', 'true');
+			chatWindow.classList.add("open");
+			chatToggle.classList.add("active");
+			chatToggle.setAttribute("aria-expanded", "true");
 			if (chatHelper) {
-				chatHelper.style.display = 'none';
+				chatHelper.style.display = "none";
 			}
 		}
 
 		function closeChat() {
-			chatWindow.classList.remove('open');
-			chatToggle.classList.remove('active');
-			chatToggle.setAttribute('aria-expanded', 'false');
+			chatWindow.classList.remove("open");
+			chatToggle.classList.remove("active");
+			chatToggle.setAttribute("aria-expanded", "false");
 		}
 
-		chatToggle.addEventListener('click', function () {
-			if (chatWindow.classList.contains('open')) {
+		chatToggle.addEventListener("click", function () {
+			if (chatWindow.classList.contains("open")) {
 				closeChat();
 			} else {
 				openChat();
 			}
 		});
 
-		chatToggle.addEventListener('keydown', function (e) {
-			if (e.key === 'Enter' || e.key === ' ') {
+		chatToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
 				e.preventDefault();
 				chatToggle.click();
 			}
@@ -106,29 +107,29 @@
 	}
 
 	function initChatInterfaces() {
-		var containers = document.querySelectorAll('[data-accw-chatbot]');
+		var containers = document.querySelectorAll("[data-accw-chatbot]");
 		if (!containers.length) {
 			return;
 		}
 
 		containers.forEach(function (container) {
-			var messagesEl = container.querySelector('[data-accw-messages]');
-			var form = container.querySelector('[data-accw-form]');
-			var input = container.querySelector('[data-accw-input]');
-			var statusEl = container.querySelector('[data-accw-status]');
-			var endBtn = container.querySelector('[data-accw-end]');
+			var messagesEl = container.querySelector("[data-accw-messages]");
+			var form = container.querySelector("[data-accw-form]");
+			var input = container.querySelector("[data-accw-input]");
+			var statusEl = container.querySelector("[data-accw-status]");
+			var endBtn = container.querySelector("[data-accw-end]");
 
 			if (!messagesEl || !form || !input) {
 				return;
 			}
 
-			var introText = container.getAttribute('data-accw-intro');
+			var introText = container.getAttribute("data-accw-intro");
 			var session = null;
 			var isSending = false;
 
 			function createSession() {
 				return {
-					id: 'accw-' + Date.now() + '-' + Math.random().toString(16).slice(2),
+					id: "accw-" + Date.now() + "-" + Math.random().toString(16).slice(2),
 					startedAt: new Date().toISOString(),
 					messages: []
 				};
@@ -138,14 +139,14 @@
 				if (!statusEl) {
 					return;
 				}
-				statusEl.textContent = message || '';
-				statusEl.classList.toggle('is-error', Boolean(isError && message));
+				statusEl.textContent = message || "";
+				statusEl.classList.toggle("is-error", Boolean(isError && message));
 			}
 
 			function toggleForm(disabled) {
 				var elements = [input];
-				var sendButton = form.querySelector('[data-accw-send]');
-				var endButton = endBtn || form.querySelector('[data-accw-end]');
+				var sendButton = form.querySelector("[data-accw-send]");
+				var endButton = endBtn || form.querySelector("[data-accw-end]");
 				if (sendButton) {
 					elements.push(sendButton);
 				}
@@ -158,23 +159,24 @@
 					}
 					el.disabled = Boolean(disabled);
 				});
-				form.classList.toggle('is-disabled', Boolean(disabled));
+				form.classList.toggle("is-disabled", Boolean(disabled));
 			}
 
 			function addMessage(role, text, options) {
 				if (!text) {
 					return;
 				}
-				var normalizedRole = role === 'assistant' ? 'assistant' : role === 'system' ? 'system' : 'user';
-				var bubble = document.createElement('div');
-				var className = 'accw-message ';
+				var normalizedRole =
+					role === "assistant" ? "assistant" : role === "system" ? "system" : "user";
+				var bubble = document.createElement("div");
+				var className = "accw-message ";
 
-				if (normalizedRole === 'assistant') {
-					className += 'accw-message-bot';
-				} else if (normalizedRole === 'user') {
-					className += 'accw-message-user';
+				if (normalizedRole === "assistant") {
+					className += "accw-message-bot";
+				} else if (normalizedRole === "user") {
+					className += "accw-message-user";
 				} else {
-					className += 'accw-message-system';
+					className += "accw-message-system";
 				}
 
 				bubble.className = className;
@@ -182,7 +184,7 @@
 				messagesEl.appendChild(bubble);
 				messagesEl.scrollTop = messagesEl.scrollHeight;
 
-				if (normalizedRole === 'system') {
+				if (normalizedRole === "system") {
 					return;
 				}
 
@@ -197,18 +199,18 @@
 
 			function resetConversation() {
 				session = createSession();
-				messagesEl.innerHTML = '';
+				messagesEl.innerHTML = "";
 				if (introText) {
-					addMessage('assistant', introText);
+					addMessage("assistant", introText);
 				}
-				input.value = '';
-				setStatus('');
+				input.value = "";
+				setStatus("");
 				toggleForm(!CFG.apiUrl);
 			}
 
 			function handleEndChat() {
 				if (!session.messages.length) {
-					setStatus('No messages to send yet.', true);
+					setStatus("No messages to send yet.", true);
 					return;
 				}
 
@@ -217,25 +219,37 @@
 				try {
 					forwardTranscript(session);
 				} catch (err) {
-					console.error('[ACCW transcript]', err);
+					console.error("[ACCW transcript]", err);
 				}
 
-				setStatus('Transcript sent. Starting a new chat.');
+				setStatus("Transcript sent. Starting a new chat.");
 				resetConversation();
 			}
 
+			// Updated to match Cloud Run ChatRequest shape
 			function sendToApi(latestMessage) {
+				// Build messages array from session history
+				var messages = session.messages.map(function (msg) {
+					var role =
+						msg.role === "assistant"
+							? "assistant"
+							: msg.role === "system"
+							? "system"
+							: "user";
+					return {
+						role: role,
+						content: msg.text
+					};
+				});
+
 				var payload = {
 					sessionId: session.id,
-					clientId: CFG.clientId || '',
-					message: latestMessage,
-					history: session.messages.map(function (msg) {
-						return {
-							role: msg.role,
-							text: msg.text,
-							at: msg.at
-						};
-					}),
+					clientId: CFG.clientId || "",
+					messages: messages,
+					latestMessage: {
+						role: "user",
+						content: latestMessage
+					},
 					meta: {
 						page: window.location.href,
 						title: document.title
@@ -243,20 +257,21 @@
 				};
 
 				var headers = {
-					'Content-Type': 'application/json'
+					"Content-Type": "application/json"
 				};
 
+				// apiAuthToken is optional, Cloud Run does not require it but we can keep it if set
 				if (CFG.apiAuthToken) {
-					headers.Authorization = 'Bearer ' + CFG.apiAuthToken;
+					headers.Authorization = "Bearer " + CFG.apiAuthToken;
 				}
 
 				return fetch(CFG.apiUrl, {
-					method: 'POST',
+					method: "POST",
 					headers: headers,
 					body: JSON.stringify(payload)
 				}).then(function (response) {
 					if (!response.ok) {
-						throw new Error('Chatbot API error (' + response.status + ')');
+						throw new Error("Chatbot API error (" + response.status + ")");
 					}
 
 					return response.text().then(function (text) {
@@ -275,9 +290,9 @@
 
 			function extractReply(data) {
 				if (!data) {
-					return '';
+					return "";
 				}
-				if (typeof data === 'string') {
+				if (typeof data === "string") {
 					return data;
 				}
 				if (data.reply) {
@@ -292,17 +307,17 @@
 				if (Array.isArray(data.messages) && data.messages.length) {
 					var last = data.messages[data.messages.length - 1];
 					if (last) {
-						return last.text || last.content || '';
+						return last.text || last.content || "";
 					}
 				}
 				if (Array.isArray(data.choices) && data.choices.length) {
 					var choice = data.choices[0];
 					if (choice) {
-						if (typeof choice.text === 'string') {
+						if (typeof choice.text === "string") {
 							return choice.text;
 						}
 						if (choice.message) {
-							if (typeof choice.message === 'string') {
+							if (typeof choice.message === "string") {
 								return choice.message;
 							}
 							if (choice.message.content) {
@@ -311,20 +326,20 @@
 						}
 					}
 				}
-				return '';
+				return "";
 			}
 
 			resetConversation();
 
 			if (!CFG.apiUrl) {
-				setStatus('Chatbot API URL missing. Set ACCW_API_URL.', true);
+				setStatus("Chatbot API URL missing. Set ACCW_API_URL.", true);
 			}
 
-			form.addEventListener('submit', function (event) {
+			form.addEventListener("submit", function (event) {
 				event.preventDefault();
 
 				if (!CFG.apiUrl) {
-					setStatus('Chatbot is offline.', true);
+					setStatus("Chatbot is offline.", true);
 					return;
 				}
 
@@ -334,24 +349,30 @@
 				}
 
 				isSending = true;
-				setStatus('Sending...');
-				addMessage('user', text);
-				input.value = '';
+				setStatus("Sending...");
+				addMessage("user", text);
+				input.value = "";
 				toggleForm(true);
 
 				sendToApi(text)
 					.then(function (response) {
 						var reply = extractReply(response);
 						if (!reply) {
-							throw new Error('Empty reply from chatbot');
+							throw new Error("Empty reply from chatbot");
 						}
-						addMessage('assistant', reply);
-						setStatus('');
+						addMessage("assistant", reply);
+						setStatus("");
 					})
 					.catch(function (err) {
-						console.error('[ACCW]', err);
-						addMessage('system', 'Something went wrong. Please try again shortly.');
-						setStatus(err && err.message ? err.message : 'Unable to reach chatbot', true);
+						console.error("[ACCW]", err);
+						addMessage(
+							"system",
+							"Something went wrong. Please try again shortly."
+						);
+						setStatus(
+							err && err.message ? err.message : "Unable to reach chatbot",
+							true
+						);
 					})
 					.finally(function () {
 						isSending = false;
@@ -361,16 +382,18 @@
 			});
 
 			if (endBtn) {
-				endBtn.addEventListener('click', handleEndChat);
+				endBtn.addEventListener("click", handleEndChat);
 			}
 
-			input.addEventListener('keydown', function (event) {
-				if (event.key === 'Enter' && !event.shiftKey) {
+			input.addEventListener("keydown", function (event) {
+				if (event.key === "Enter" && !event.shiftKey) {
 					event.preventDefault();
-					if (typeof form.requestSubmit === 'function') {
+					if (typeof form.requestSubmit === "function") {
 						form.requestSubmit();
 					} else {
-						form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+						form.dispatchEvent(
+							new Event("submit", { cancelable: true, bubbles: true })
+						);
 					}
 				}
 			});
@@ -382,8 +405,8 @@
 		initChatInterfaces();
 	}
 
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', init);
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", init);
 	} else {
 		init();
 	}
