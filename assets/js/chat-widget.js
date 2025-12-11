@@ -55,6 +55,7 @@
 	window.ACCW_forwardTranscript = forwardTranscript;
 
 	function initToggle() {
+		var chatContainer = byId("accwContainer");
 		var chatToggle = byId("chatToggle");
 		var chatWindow = byId("chatWindow");
 		var chatHelper = byId("chatHelper");
@@ -90,13 +91,44 @@
 			chatToggle.setAttribute("aria-expanded", "false");
 		}
 
-		chatToggle.addEventListener("click", function () {
+		function handleToggle(e) {
+			if (e) {
+				e.preventDefault();
+				e.__accwHandled = true;
+			}
 			if (chatWindow.classList.contains("open")) {
 				closeChat();
 			} else {
 				openChat();
 			}
-		});
+			if (chatHelper) {
+				chatHelper.style.display = "none";
+			}
+		}
+
+		// Attach on the button (capture to avoid other listeners swallowing it).
+		chatToggle.addEventListener("click", handleToggle, { capture: true });
+
+		// Fallback delegation in case another script interferes.
+		if (chatContainer) {
+			chatContainer.addEventListener(
+				"click",
+				function (e) {
+					if (e && e.__accwHandled) return;
+					if (e && e.target && e.target.closest && e.target.closest("#chatToggle")) {
+						handleToggle(e);
+					}
+				},
+				{ capture: true }
+			);
+		}
+
+		// Auto-hide helper bubble after a short delay to avoid overlay confusion.
+		if (chatHelper) {
+			setTimeout(function () {
+				chatHelper.style.display = "none";
+			}, 4000);
+		}
 
 		chatToggle.addEventListener("keydown", function (e) {
 			if (e.key === "Enter" || e.key === " ") {
