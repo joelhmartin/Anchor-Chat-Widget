@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.0.9
+ * Version: 2.1.0
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -215,42 +215,6 @@ function accw_render_settings_page() {
 				<tbody>
 					<tr>
 						<th scope="row">
-							<label for="accw_api_url"><?php esc_html_e( 'Chat API URL (Cloud Run /chat)', 'anchor-corps-chat-widget' ); ?></label>
-						</th>
-						<td>
-							<input type="url" class="regular-text" id="accw_api_url" name="accw_api_url"
-								   value="<?php echo esc_attr( get_option( 'accw_api_url', '' ) ); ?>" />
-							<p class="description">
-								<?php esc_html_e( 'Full URL to your Cloud Run /chat endpoint.', 'anchor-corps-chat-widget' ); ?>
-							</p>
-							<?php if ( accw_get_env( 'ACCW_API_URL' ) ) : ?>
-								<p class="description">
-									<?php esc_html_e( 'Note: ACCW_API_URL is set in the server environment and will override this value.', 'anchor-corps-chat-widget' ); ?>
-								</p>
-							<?php endif; ?>
-						</td>
-					</tr>
-
-					<tr>
-						<th scope="row">
-							<label for="accw_forward_transcript_url"><?php esc_html_e( 'Transcript URL (Cloud Run /transcript)', 'anchor-corps-chat-widget' ); ?></label>
-						</th>
-						<td>
-							<input type="url" class="regular-text" id="accw_forward_transcript_url" name="accw_forward_transcript_url"
-								   value="<?php echo esc_attr( get_option( 'accw_forward_transcript_url', '' ) ); ?>" />
-							<p class="description">
-								<?php esc_html_e( 'Full URL to your Cloud Run /transcript endpoint.', 'anchor-corps-chat-widget' ); ?>
-							</p>
-							<?php if ( accw_get_env( 'ACCW_FORWARD_TRANSCRIPT_URL' ) ) : ?>
-								<p class="description">
-									<?php esc_html_e( 'Note: ACCW_FORWARD_TRANSCRIPT_URL is set in the server environment and will override this value.', 'anchor-corps-chat-widget' ); ?>
-								</p>
-							<?php endif; ?>
-						</td>
-					</tr>
-
-					<tr>
-						<th scope="row">
 							<label for="accw_client_id"><?php esc_html_e( 'Client Account ID', 'anchor-corps-chat-widget' ); ?></label>
 						</th>
 						<td>
@@ -262,24 +226,6 @@ function accw_render_settings_page() {
 							<?php if ( accw_get_env( 'ACCW_CLIENT_ID' ) ) : ?>
 								<p class="description">
 									<?php esc_html_e( 'Note: ACCW_CLIENT_ID is set in the server environment and will override this value.', 'anchor-corps-chat-widget' ); ?>
-								</p>
-							<?php endif; ?>
-						</td>
-					</tr>
-
-					<tr>
-						<th scope="row">
-							<label for="accw_forward_token"><?php esc_html_e( 'Forward Token', 'anchor-corps-chat-widget' ); ?></label>
-						</th>
-						<td>
-							<input type="text" class="regular-text" id="accw_forward_token" name="accw_forward_token"
-								   value="<?php echo esc_attr( get_option( 'accw_forward_token', 'anchor_forward_token_v1' ) ); ?>" />
-							<p class="description">
-								<?php esc_html_e( 'Shared secret token that Cloud Run validates before forwarding a transcript to CTM.', 'anchor-corps-chat-widget' ); ?>
-							</p>
-							<?php if ( accw_get_env( 'ACCW_FORWARD_TOKEN' ) ) : ?>
-								<p class="description">
-									<?php esc_html_e( 'Note: ACCW_FORWARD_TOKEN is set in the server environment and will override this value.', 'anchor-corps-chat-widget' ); ?>
 								</p>
 							<?php endif; ?>
 						</td>
