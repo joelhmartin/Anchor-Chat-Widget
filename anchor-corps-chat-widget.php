@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.0.7
+ * Version: 2.0.8
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -15,6 +15,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 require __DIR__ . '/vendor/autoload.php';
 use Dotenv\Dotenv;
 use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+
+/**
+ * Helper to read environment variables.
+ *
+ * Prefer $_ENV (populated by phpdotenv) and fall back to getenv().
+ *
+ * @param string $name
+ * @return string|null
+ */
+function accw_get_env( $name ) {
+	if ( isset( $_ENV[ $name ] ) && '' !== $_ENV[ $name ] ) {
+		return (string) $_ENV[ $name ];
+	}
+
+	$value = getenv( $name );
+	if ( false !== $value && '' !== $value ) {
+		return (string) $value;
+	}
+
+	return null;
+}
 
 // Load .env if present.
 if ( file_exists( __DIR__ . '/.env' ) ) {
@@ -31,8 +52,7 @@ $updateChecker = PucFactory::buildUpdateChecker(
 $updateChecker->setBranch( 'main' );
 
 // Auth token from environment, with fallbacks.
-$token = $_ENV['GITHUB_ACCESS_TOKEN']
-	?? getenv( 'GITHUB_ACCESS_TOKEN' )
+$token = accw_get_env( 'GITHUB_ACCESS_TOKEN' )
 	?: ( defined( 'GITHUB_ACCESS_TOKEN' ) ? GITHUB_ACCESS_TOKEN : null );
 
 if ( $token ) {
@@ -203,7 +223,7 @@ function accw_render_settings_page() {
 							<p class="description">
 								<?php esc_html_e( 'Full URL to your Cloud Run /chat endpoint.', 'anchor-corps-chat-widget' ); ?>
 							</p>
-							<?php if ( getenv( 'ACCW_API_URL' ) ) : ?>
+							<?php if ( accw_get_env( 'ACCW_API_URL' ) ) : ?>
 								<p class="description">
 									<?php esc_html_e( 'Note: ACCW_API_URL is set in the server environment and will override this value.', 'anchor-corps-chat-widget' ); ?>
 								</p>
@@ -221,7 +241,7 @@ function accw_render_settings_page() {
 							<p class="description">
 								<?php esc_html_e( 'Full URL to your Cloud Run /transcript endpoint.', 'anchor-corps-chat-widget' ); ?>
 							</p>
-							<?php if ( getenv( 'ACCW_FORWARD_TRANSCRIPT_URL' ) ) : ?>
+							<?php if ( accw_get_env( 'ACCW_FORWARD_TRANSCRIPT_URL' ) ) : ?>
 								<p class="description">
 									<?php esc_html_e( 'Note: ACCW_FORWARD_TRANSCRIPT_URL is set in the server environment and will override this value.', 'anchor-corps-chat-widget' ); ?>
 								</p>
@@ -239,7 +259,7 @@ function accw_render_settings_page() {
 							<p class="description">
 								<?php esc_html_e( 'CTM account id that Cloud Run uses to route transcripts and activity.', 'anchor-corps-chat-widget' ); ?>
 							</p>
-							<?php if ( getenv( 'ACCW_CLIENT_ID' ) ) : ?>
+							<?php if ( accw_get_env( 'ACCW_CLIENT_ID' ) ) : ?>
 								<p class="description">
 									<?php esc_html_e( 'Note: ACCW_CLIENT_ID is set in the server environment and will override this value.', 'anchor-corps-chat-widget' ); ?>
 								</p>
@@ -257,7 +277,7 @@ function accw_render_settings_page() {
 							<p class="description">
 								<?php esc_html_e( 'Shared secret token that Cloud Run validates before forwarding a transcript to CTM.', 'anchor-corps-chat-widget' ); ?>
 							</p>
-							<?php if ( getenv( 'ACCW_FORWARD_TOKEN' ) ) : ?>
+							<?php if ( accw_get_env( 'ACCW_FORWARD_TOKEN' ) ) : ?>
 								<p class="description">
 									<?php esc_html_e( 'Note: ACCW_FORWARD_TOKEN is set in the server environment and will override this value.', 'anchor-corps-chat-widget' ); ?>
 								</p>
@@ -340,23 +360,23 @@ function accw_get_settings() {
 	}
 
 	$settings = array(
-		'headerTitle'          => getenv( 'ACCW_HEADER_TITLE' )
+		'headerTitle'          => accw_get_env( 'ACCW_HEADER_TITLE' )
 			?: get_option( 'accw_header_title', 'Chat with us' ),
-		'headerSubtitle'       => getenv( 'ACCW_HEADER_SUBTITLE' )
+		'headerSubtitle'       => accw_get_env( 'ACCW_HEADER_SUBTITLE' )
 			?: get_option( 'accw_header_subtitle', 'We are here to help' ),
-		'helperText'           => getenv( 'ACCW_HELPER_TEXT' )
+		'helperText'           => accw_get_env( 'ACCW_HELPER_TEXT' )
 			?: get_option( 'accw_helper_text', 'Hi, how can we help?' ),
-		'apiUrl'               => getenv( 'ACCW_API_URL' )
+		'apiUrl'               => accw_get_env( 'ACCW_API_URL' )
 			?: get_option( 'accw_api_url', '' ),
-		'apiAuthToken'         => getenv( 'ACCW_API_AUTH_TOKEN' )
+		'apiAuthToken'         => accw_get_env( 'ACCW_API_AUTH_TOKEN' )
 			?: '', // keep token in env only
-		'forwardTranscriptUrl' => getenv( 'ACCW_FORWARD_TRANSCRIPT_URL' )
+		'forwardTranscriptUrl' => accw_get_env( 'ACCW_FORWARD_TRANSCRIPT_URL' )
 			?: get_option( 'accw_forward_transcript_url', '' ),
-		'clientId'             => getenv( 'ACCW_CLIENT_ID' )
+		'clientId'             => accw_get_env( 'ACCW_CLIENT_ID' )
 			?: get_option( 'accw_client_id', '' ),
-		'forwardToken'         => getenv( 'ACCW_FORWARD_TOKEN' )
+		'forwardToken'         => accw_get_env( 'ACCW_FORWARD_TOKEN' )
 			?: get_option( 'accw_forward_token', 'anchor_forward_token_v1' ),
-		'position'             => getenv( 'ACCW_POSITION' )
+		'position'             => accw_get_env( 'ACCW_POSITION' )
 			?: get_option( 'accw_position', 'bottom-right' ),
 		'ariaLabelOpen'        => 'Open chat',
 	);
