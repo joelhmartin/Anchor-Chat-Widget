@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.1.0
+ * Version: 2.0.8
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -312,16 +312,18 @@ function accw_get_settings() {
 			?: get_option( 'accw_header_subtitle', 'We are here to help' ),
 		'helperText'           => accw_get_env( 'ACCW_HELPER_TEXT' )
 			?: get_option( 'accw_helper_text', 'Hi, how can we help?' ),
-		// Chat API is fixed to the shared Cloud Run backend.
-		'apiUrl'               => 'https://ai-endpoint-406510042833.europe-west1.run.app/chat',
+		// Fixed backend endpoints with optional env overrides.
+		'apiUrl'               => accw_get_env( 'ACCW_API_URL' )
+			?: 'https://ai-endpoint-406510042833.europe-west1.run.app/chat',
 		'apiAuthToken'         => accw_get_env( 'ACCW_API_AUTH_TOKEN' )
 			?: '', // keep token in env only
-		// Transcript forwarding also targets the shared Cloud Run backend.
-		'forwardTranscriptUrl' => 'https://ai-endpoint-406510042833.europe-west1.run.app/lead',
+		'forwardTranscriptUrl' => accw_get_env( 'ACCW_FORWARD_TRANSCRIPT_URL' )
+			?: 'https://ai-endpoint-406510042833.europe-west1.run.app/lead',
 		'clientId'             => accw_get_env( 'ACCW_CLIENT_ID' )
 			?: get_option( 'accw_client_id', '' ),
-		// Forward token is fixed; must match FORWARD_TOKEN on Cloud Run.
-		'forwardToken'         => 'anchor_forward_token_v1',
+		// Forward token must match FORWARD_TOKEN on Cloud Run.
+		'forwardToken'         => accw_get_env( 'ACCW_FORWARD_TOKEN' )
+			?: 'anchor_forward_token_v1',
 		'position'             => accw_get_env( 'ACCW_POSITION' )
 			?: get_option( 'accw_position', 'bottom-right' ),
 		'ariaLabelOpen'        => 'Open chat',
