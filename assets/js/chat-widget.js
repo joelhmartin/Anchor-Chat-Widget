@@ -144,17 +144,36 @@
 			return;
 		}
 
+		function isWithinBusinessHours(hoursStr) {
+			if (!hoursStr || typeof hoursStr !== "string") return false;
+			var parts = hoursStr.split(",").map(function (p) { return p.trim(); }).filter(Boolean);
+			if (!parts.length) return false;
+
+			var now = new Date();
+			return parts.some(function (part) {
+				var match = part.match(/^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/);
+				if (!match) return false;
+				var start = new Date(now);
+				start.setHours(parseInt(match[1], 10), parseInt(match[2], 10), 0, 0);
+				var end = new Date(now);
+				end.setHours(parseInt(match[3], 10), parseInt(match[4], 10), 0, 0);
+				return now >= start && now <= end;
+			});
+		}
+
 		containers.forEach(function (container) {
 			var messagesEl = container.querySelector("[data-accw-messages]");
 			var form = container.querySelector("[data-accw-form]");
 			var input = container.querySelector("[data-accw-input]");
 			var statusEl = container.querySelector("[data-accw-status]");
 			var endBtn = container.querySelector("[data-accw-end]");
+			var leadBubble = container.querySelector("[data-accw-lead-bubble]");
 			var leadForm = container.querySelector("[data-accw-lead-form]");
 			var leadName = container.querySelector("[data-accw-lead-name]");
 			var leadEmail = container.querySelector("[data-accw-lead-email]");
 			var leadPhone = container.querySelector("[data-accw-lead-phone]");
 			var leadStatus = container.querySelector("[data-accw-lead-status]");
+			var leadCall = container.querySelector("[data-accw-lead-call]");
 
 			if (!messagesEl || !form || !input) {
 				return;
@@ -165,6 +184,7 @@
 			var isSending = false;
 			var leadShown = false;
 			var leadSubmitted = false;
+			var hasUserMessage = false;
 
 			function createSession() {
 				return {
@@ -235,10 +255,15 @@
 					});
 				}
 
-				if (!leadShown && normalizedRole === "assistant") {
+				if (normalizedRole === "user") {
+					hasUserMessage = true;
+				}
+
+				// Show lead bubble only after we have a user message and an assistant reply.
+				if (!leadShown && normalizedRole === "assistant" && hasUserMessage) {
 					leadShown = true;
-					if (leadForm) {
-						leadForm.classList.add("is-visible");
+					if (leadBubble) {
+						leadBubble.classList.add("is-visible");
 					}
 				}
 			}
@@ -246,6 +271,9 @@
 			function resetConversation() {
 				session = createSession();
 				messagesEl.innerHTML = "";
+				if (leadBubble) {
+					leadBubble.classList.remove("is-visible");
+				}
 				if (introText) {
 					addMessage("assistant", introText);
 				}
@@ -394,6 +422,15 @@
 					return;
 				}
 
+				if (leadShown && !leadSubmitted) {
+					setStatus("Please share your contact details to continue.", true);
+					if (leadBubble) {
+						leadBubble.classList.add("is-visible");
+						messagesEl.scrollTop = messagesEl.scrollHeight;
+					}
+					return;
+				}
+
 				var text = input.value.trim();
 				if (!text || isSending) {
 					return;
@@ -510,15 +547,32 @@
 						.then(function () {
 							leadSubmitted = true;
 							setLeadStatus("Thanks! We’ve got your details.", false);
-							if (leadForm) {
-								leadForm.classList.remove("is-visible");
+							if (leadBubble) {
+								leadBubble.classList.remove("is-visible");
 							}
+							setStatus("", false);
 						})
 						.catch(function (err) {
 							console.error("[ACCW lead]", err);
 							setLeadStatus("Could not send details. Please try again.", true);
 						});
 				});
+			}
+
+			// Render call link if within business hours and phone is present.
+			if (leadCall) {
+				var phone = (CFG.businessPhone || "").replace(/\D/g, "");
+				var hoursOk = isWithinBusinessHours(CFG.businessHours || "");
+				if (phone && hoursOk) {
+					var link = leadCall.querySelector("a");
+					if (link) {
+						link.href = "tel:" + phone;
+						link.textContent = "or just give us a call: " + (CFG.businessPhone || "");
+					}
+					leadCall.style.display = "block";
+				} else {
+					leadCall.style.display = "none";
+				}
 			}
 
 			input.addEventListener("keydown", function (event) {

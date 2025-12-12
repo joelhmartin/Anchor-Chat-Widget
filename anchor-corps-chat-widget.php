@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.1.5
+ * Version: 2.1.6
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -35,6 +35,34 @@ function accw_get_env( $name ) {
 	}
 
 	return null;
+}
+
+/**
+ * Sanitize a business hours string in the format "HH:MM-HH:MM" or multiple ranges separated by commas.
+ *
+ * Examples:
+ *  - 09:00-17:00
+ *  - 09:00-12:00,13:00-17:00
+ *
+ * Returns an empty string if the format is invalid.
+ *
+ * @param string $value
+ * @return string
+ */
+function accw_sanitize_hours( $value ) {
+	$value = is_string( $value ) ? trim( $value ) : '';
+	if ( '' === $value ) {
+		return '';
+	}
+
+	$parts = array_map( 'trim', explode( ',', $value ) );
+	foreach ( $parts as $part ) {
+		if ( ! preg_match( '/^\d{2}:\d{2}-\d{2}:\d{2}$/', $part ) ) {
+			return '';
+		}
+	}
+
+	return implode( ',', $parts );
 }
 
 // Load .env if present.
@@ -182,6 +210,16 @@ function accw_register_settings() {
 		array(
 			'type'              => 'string',
 			'sanitize_callback' => 'wp_kses_post',
+			'default'           => '',
+		)
+	);
+
+	register_setting(
+		'accw_settings',
+		'accw_business_hours',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'accw_sanitize_hours',
 			'default'           => '',
 		)
 	);
@@ -336,6 +374,19 @@ function accw_render_settings_page() {
 
 					<tr>
 						<th scope="row">
+							<label for="accw_business_hours"><?php esc_html_e( 'Business hours (HH:MM-HH:MM, local time)', 'anchor-corps-chat-widget' ); ?></label>
+						</th>
+						<td>
+							<input type="text" class="regular-text" id="accw_business_hours" name="accw_business_hours"
+								   value="<?php echo esc_attr( get_option( 'accw_business_hours', '' ) ); ?>" />
+							<p class="description">
+								<?php esc_html_e( 'Used to show the call link under the contact form during open hours. Format: HH:MM-HH:MM, or multiple ranges separated by commas (e.g., 09:00-12:00,13:00-17:00).', 'anchor-corps-chat-widget' ); ?>
+							</p>
+						</td>
+					</tr>
+
+					<tr>
+						<th scope="row">
 							<label for="accw_header_title"><?php esc_html_e( 'Header title', 'anchor-corps-chat-widget' ); ?></label>
 						</th>
 						<td>
@@ -437,6 +488,8 @@ function accw_get_settings() {
 			?: get_option( 'accw_business_email', '' ),
 		'businessContext'      => accw_get_env( 'ACCW_BUSINESS_CONTEXT' )
 			?: get_option( 'accw_business_context', '' ),
+		'businessHours'        => accw_get_env( 'ACCW_BUSINESS_HOURS' )
+			?: get_option( 'accw_business_hours', '' ),
 		'position'             => accw_get_env( 'ACCW_POSITION' )
 			?: get_option( 'accw_position', 'bottom-right' ),
 		'ariaLabelOpen'        => 'Open chat',
@@ -502,6 +555,7 @@ function accw_enqueue_assets() {
 		'businessPhone'       => $settings['businessPhone'],
 		'businessEmail'       => $settings['businessEmail'],
 		'businessContext'     => $settings['businessContext'],
+		'businessHours'       => $settings['businessHours'],
 		'position'            => $settings['position'],
 	);
 
@@ -601,27 +655,33 @@ function accw_render_chatbot_shortcode( $atts = array() ) {
 	ob_start();
 	?>
 	<div class="accw-chatbot" data-accw-chatbot="<?php echo esc_attr( $uid ); ?>" data-accw-intro="<?php echo esc_attr( $atts['intro'] ); ?>">
-		<div class="accw-chatbot__messages" data-accw-messages role="log" aria-live="polite" aria-busy="false"></div>
+		<div class="accw-chatbot__messages" data-accw-messages role="log" aria-live="polite" aria-busy="false">
+			<div class="accw-message accw-message-bot accw-lead-bubble" data-accw-lead-bubble>
+				<p class="accw-lead__title"><?php esc_html_e( 'In case we get disconnected, can you share contact details?', 'anchor-corps-chat-widget' ); ?></p>
+				<form class="accw-lead" data-accw-lead-form novalidate>
+					<div class="accw-lead__row">
+						<label class="accw-visually-hidden" for="accwLeadName-<?php echo esc_attr( $uid ); ?>"><?php esc_html_e( 'Name', 'anchor-corps-chat-widget' ); ?></label>
+						<input type="text" id="accwLeadName-<?php echo esc_attr( $uid ); ?>" data-accw-lead-name placeholder="<?php esc_attr_e( 'Name', 'anchor-corps-chat-widget' ); ?>" />
+					</div>
+					<div class="accw-lead__row">
+						<label class="accw-visually-hidden" for="accwLeadEmail-<?php echo esc_attr( $uid ); ?>"><?php esc_html_e( 'Email', 'anchor-corps-chat-widget' ); ?></label>
+						<input type="email" id="accwLeadEmail-<?php echo esc_attr( $uid ); ?>" data-accw-lead-email placeholder="<?php esc_attr_e( 'Email', 'anchor-corps-chat-widget' ); ?>" />
+					</div>
+					<div class="accw-lead__row">
+						<label class="accw-visually-hidden" for="accwLeadPhone-<?php echo esc_attr( $uid ); ?>"><?php esc_html_e( 'Phone', 'anchor-corps-chat-widget' ); ?></label>
+						<input type="tel" id="accwLeadPhone-<?php echo esc_attr( $uid ); ?>" data-accw-lead-phone placeholder="<?php esc_attr_e( 'Phone', 'anchor-corps-chat-widget' ); ?>" />
+					</div>
+					<div class="accw-lead__actions">
+						<button type="submit" class="accw-btn accw-btn-primary" data-accw-lead-submit><?php esc_html_e( 'Send', 'anchor-corps-chat-widget' ); ?></button>
+						<div class="accw-lead__status" data-accw-lead-status></div>
+					</div>
+					<div class="accw-lead__call" data-accw-lead-call style="display:none;">
+						<a href="#" rel="nofollow noopener"></a>
+					</div>
+				</form>
+			</div>
+		</div>
 		<div class="accw-chatbot__status" data-accw-status></div>
-		<form class="accw-lead" data-accw-lead-form novalidate>
-			<p class="accw-lead__title"><?php esc_html_e( 'In case we get disconnected, can you share contact details?', 'anchor-corps-chat-widget' ); ?></p>
-			<div class="accw-lead__row">
-				<label class="accw-visually-hidden" for="accwLeadName-<?php echo esc_attr( $uid ); ?>"><?php esc_html_e( 'Name', 'anchor-corps-chat-widget' ); ?></label>
-				<input type="text" id="accwLeadName-<?php echo esc_attr( $uid ); ?>" data-accw-lead-name placeholder="<?php esc_attr_e( 'Name', 'anchor-corps-chat-widget' ); ?>" />
-			</div>
-			<div class="accw-lead__row">
-				<label class="accw-visually-hidden" for="accwLeadEmail-<?php echo esc_attr( $uid ); ?>"><?php esc_html_e( 'Email', 'anchor-corps-chat-widget' ); ?></label>
-				<input type="email" id="accwLeadEmail-<?php echo esc_attr( $uid ); ?>" data-accw-lead-email placeholder="<?php esc_attr_e( 'Email', 'anchor-corps-chat-widget' ); ?>" />
-			</div>
-			<div class="accw-lead__row">
-				<label class="accw-visually-hidden" for="accwLeadPhone-<?php echo esc_attr( $uid ); ?>"><?php esc_html_e( 'Phone', 'anchor-corps-chat-widget' ); ?></label>
-				<input type="tel" id="accwLeadPhone-<?php echo esc_attr( $uid ); ?>" data-accw-lead-phone placeholder="<?php esc_attr_e( 'Phone', 'anchor-corps-chat-widget' ); ?>" />
-			</div>
-			<div class="accw-lead__actions">
-				<button type="submit" class="accw-btn accw-btn-primary" data-accw-lead-submit><?php esc_html_e( 'Send', 'anchor-corps-chat-widget' ); ?></button>
-				<div class="accw-lead__status" data-accw-lead-status></div>
-			</div>
-		</form>
 		<form class="accw-chatbot__form" data-accw-form novalidate>
 			<label class="accw-visually-hidden" for="accwInput-<?php echo esc_attr( $uid ); ?>">
 				<?php esc_html_e( 'Type your message', 'anchor-corps-chat-widget' ); ?>

@@ -327,18 +327,22 @@
 
 /* Lead capture form */
 .accw-lead {
-    display: none;
-    padding: 10px 16px 0;
-    background: #fff;
-    border-top: 1px solid #eceff4;
+    padding: 0;
 }
 
-.accw-lead.is-visible {
+.accw-lead-bubble {
+    display: none;
+    background: #eef0f5;
+    color: #1f1f1f;
+    border-bottom-left-radius: 4px;
+}
+
+.accw-lead-bubble.is-visible {
     display: block;
 }
 
 .accw-lead__title {
-    margin: 0 0 8px;
+    margin: 0 0 10px;
     font-size: 14px;
     font-weight: 600;
     color: #1f1f1f;
@@ -350,10 +354,11 @@
 
 .accw-lead__row input {
     width: 100%;
-    padding: 9px 10px;
+    padding: 9px 12px;
     border: 1px solid #d7dbe7;
-    border-radius: 8px;
+    border-radius: 10px;
     font-size: 14px;
+    background: #fff;
 }
 
 .accw-lead__row input:focus {
@@ -376,4 +381,19 @@
 
 .accw-lead__status.is-error {
     color: #9f1d18;
+}
+
+.accw-lead__call {
+    font-size: 13px;
+    margin-top: 6px;
+}
+
+.accw-lead__call a {
+    color: var(--color-accent, #6c63ff);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.accw-lead__call a:hover {
+    text-decoration: underline;
 }
