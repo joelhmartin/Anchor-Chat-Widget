@@ -135,6 +135,57 @@ function accw_register_settings() {
 		)
 	);
 
+	// Business context settings.
+	register_setting(
+		'accw_settings',
+		'accw_business_name',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_text_field',
+			'default'           => '',
+		)
+	);
+
+	register_setting(
+		'accw_settings',
+		'accw_business_location',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_text_field',
+			'default'           => '',
+		)
+	);
+
+	register_setting(
+		'accw_settings',
+		'accw_business_phone',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_text_field',
+			'default'           => '',
+		)
+	);
+
+	register_setting(
+		'accw_settings',
+		'accw_business_email',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_email',
+			'default'           => '',
+		)
+	);
+
+	register_setting(
+		'accw_settings',
+		'accw_business_context',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'wp_kses_post',
+			'default'           => '',
+		)
+	);
+
 	// Optional UI text settings.
 	register_setting(
 		'accw_settings',
@@ -233,6 +284,58 @@ function accw_render_settings_page() {
 
 					<tr>
 						<th scope="row">
+							<label for="accw_business_name"><?php esc_html_e( 'Business name', 'anchor-corps-chat-widget' ); ?></label>
+						</th>
+						<td>
+							<input type="text" class="regular-text" id="accw_business_name" name="accw_business_name"
+								   value="<?php echo esc_attr( get_option( 'accw_business_name', '' ) ); ?>" />
+						</td>
+					</tr>
+
+					<tr>
+						<th scope="row">
+							<label for="accw_business_location"><?php esc_html_e( 'Business location', 'anchor-corps-chat-widget' ); ?></label>
+						</th>
+						<td>
+							<input type="text" class="regular-text" id="accw_business_location" name="accw_business_location"
+								   value="<?php echo esc_attr( get_option( 'accw_business_location', '' ) ); ?>" />
+						</td>
+					</tr>
+
+					<tr>
+						<th scope="row">
+							<label for="accw_business_phone"><?php esc_html_e( 'Business phone', 'anchor-corps-chat-widget' ); ?></label>
+						</th>
+						<td>
+							<input type="text" class="regular-text" id="accw_business_phone" name="accw_business_phone"
+								   value="<?php echo esc_attr( get_option( 'accw_business_phone', '' ) ); ?>" />
+						</td>
+					</tr>
+
+					<tr>
+						<th scope="row">
+							<label for="accw_business_email"><?php esc_html_e( 'Business email', 'anchor-corps-chat-widget' ); ?></label>
+						</th>
+						<td>
+							<input type="email" class="regular-text" id="accw_business_email" name="accw_business_email"
+								   value="<?php echo esc_attr( get_option( 'accw_business_email', '' ) ); ?>" />
+						</td>
+					</tr>
+
+					<tr>
+						<th scope="row" valign="top">
+							<label for="accw_business_context"><?php esc_html_e( 'Business context / instructions', 'anchor-corps-chat-widget' ); ?></label>
+						</th>
+						<td>
+							<textarea class="large-text code" rows="6" id="accw_business_context" name="accw_business_context"><?php echo esc_textarea( get_option( 'accw_business_context', '' ) ); ?></textarea>
+							<p class="description">
+								<?php esc_html_e( 'Optional prompt additions such as insurance/financing info or special instructions.', 'anchor-corps-chat-widget' ); ?>
+							</p>
+						</td>
+					</tr>
+
+					<tr>
+						<th scope="row">
 							<label for="accw_header_title"><?php esc_html_e( 'Header title', 'anchor-corps-chat-widget' ); ?></label>
 						</th>
 						<td>
@@ -324,6 +427,16 @@ function accw_get_settings() {
 		// Forward token must match FORWARD_TOKEN on Cloud Run.
 		'forwardToken'         => accw_get_env( 'ACCW_FORWARD_TOKEN' )
 			?: 'anchor_forward_token_v1',
+		'businessName'         => accw_get_env( 'ACCW_BUSINESS_NAME' )
+			?: get_option( 'accw_business_name', '' ),
+		'businessLocation'     => accw_get_env( 'ACCW_BUSINESS_LOCATION' )
+			?: get_option( 'accw_business_location', '' ),
+		'businessPhone'        => accw_get_env( 'ACCW_BUSINESS_PHONE' )
+			?: get_option( 'accw_business_phone', '' ),
+		'businessEmail'        => accw_get_env( 'ACCW_BUSINESS_EMAIL' )
+			?: get_option( 'accw_business_email', '' ),
+		'businessContext'      => accw_get_env( 'ACCW_BUSINESS_CONTEXT' )
+			?: get_option( 'accw_business_context', '' ),
 		'position'             => accw_get_env( 'ACCW_POSITION' )
 			?: get_option( 'accw_position', 'bottom-right' ),
 		'ariaLabelOpen'        => 'Open chat',
@@ -384,6 +497,11 @@ function accw_enqueue_assets() {
 		'forwardTranscriptUrl'=> $settings['forwardTranscriptUrl'],
 		'clientId'            => $settings['clientId'],
 		'forwardToken'        => $settings['forwardToken'],
+		'businessName'        => $settings['businessName'],
+		'businessLocation'    => $settings['businessLocation'],
+		'businessPhone'       => $settings['businessPhone'],
+		'businessEmail'       => $settings['businessEmail'],
+		'businessContext'     => $settings['businessContext'],
 		'position'            => $settings['position'],
 	);
 
@@ -413,7 +531,6 @@ function accw_render_widget() {
 	}
 	?>
 	<div class="chat-widget-container" id="accwContainer" aria-live="polite">
-		<div class="chat-helper" id="chatHelper"></div>
 		<button class="chat-button" id="chatToggle" aria-label="<?php echo esc_attr( $settings['ariaLabelOpen'] ); ?>">
 			<svg class="chat-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
 				<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
@@ -486,6 +603,25 @@ function accw_render_chatbot_shortcode( $atts = array() ) {
 	<div class="accw-chatbot" data-accw-chatbot="<?php echo esc_attr( $uid ); ?>" data-accw-intro="<?php echo esc_attr( $atts['intro'] ); ?>">
 		<div class="accw-chatbot__messages" data-accw-messages role="log" aria-live="polite" aria-busy="false"></div>
 		<div class="accw-chatbot__status" data-accw-status></div>
+		<form class="accw-lead" data-accw-lead-form novalidate>
+			<p class="accw-lead__title"><?php esc_html_e( 'In case we get disconnected, can you share contact details?', 'anchor-corps-chat-widget' ); ?></p>
+			<div class="accw-lead__row">
+				<label class="accw-visually-hidden" for="accwLeadName-<?php echo esc_attr( $uid ); ?>"><?php esc_html_e( 'Name', 'anchor-corps-chat-widget' ); ?></label>
+				<input type="text" id="accwLeadName-<?php echo esc_attr( $uid ); ?>" data-accw-lead-name placeholder="<?php esc_attr_e( 'Name', 'anchor-corps-chat-widget' ); ?>" />
+			</div>
+			<div class="accw-lead__row">
+				<label class="accw-visually-hidden" for="accwLeadEmail-<?php echo esc_attr( $uid ); ?>"><?php esc_html_e( 'Email', 'anchor-corps-chat-widget' ); ?></label>
+				<input type="email" id="accwLeadEmail-<?php echo esc_attr( $uid ); ?>" data-accw-lead-email placeholder="<?php esc_attr_e( 'Email', 'anchor-corps-chat-widget' ); ?>" />
+			</div>
+			<div class="accw-lead__row">
+				<label class="accw-visually-hidden" for="accwLeadPhone-<?php echo esc_attr( $uid ); ?>"><?php esc_html_e( 'Phone', 'anchor-corps-chat-widget' ); ?></label>
+				<input type="tel" id="accwLeadPhone-<?php echo esc_attr( $uid ); ?>" data-accw-lead-phone placeholder="<?php esc_attr_e( 'Phone', 'anchor-corps-chat-widget' ); ?>" />
+			</div>
+			<div class="accw-lead__actions">
+				<button type="submit" class="accw-btn accw-btn-primary" data-accw-lead-submit><?php esc_html_e( 'Send', 'anchor-corps-chat-widget' ); ?></button>
+				<div class="accw-lead__status" data-accw-lead-status></div>
+			</div>
+		</form>
 		<form class="accw-chatbot__form" data-accw-form novalidate>
 			<label class="accw-visually-hidden" for="accwInput-<?php echo esc_attr( $uid ); ?>">
 				<?php esc_html_e( 'Type your message', 'anchor-corps-chat-widget' ); ?>

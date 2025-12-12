@@ -324,3 +324,56 @@
     border-top: 6px solid transparent;
     border-bottom: 6px solid transparent;
 }
+
+/* Lead capture form */
+.accw-lead {
+    display: none;
+    padding: 10px 16px 0;
+    background: #fff;
+    border-top: 1px solid #eceff4;
+}
+
+.accw-lead.is-visible {
+    display: block;
+}
+
+.accw-lead__title {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+.accw-lead__row {
+    margin-bottom: 8px;
+}
+
+.accw-lead__row input {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid #d7dbe7;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.accw-lead__row input:focus {
+    outline: none;
+    border-color: var(--color-accent, #6c63ff);
+    box-shadow: 0 0 0 1px rgba(108, 99, 255, 0.2);
+}
+
+.accw-lead__actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.accw-lead__status {
+    font-size: 13px;
+    color: #4f566b;
+}
+
+.accw-lead__status.is-error {
+    color: #9f1d18;
+}

@@ -150,6 +150,11 @@
 			var input = container.querySelector("[data-accw-input]");
 			var statusEl = container.querySelector("[data-accw-status]");
 			var endBtn = container.querySelector("[data-accw-end]");
+			var leadForm = container.querySelector("[data-accw-lead-form]");
+			var leadName = container.querySelector("[data-accw-lead-name]");
+			var leadEmail = container.querySelector("[data-accw-lead-email]");
+			var leadPhone = container.querySelector("[data-accw-lead-phone]");
+			var leadStatus = container.querySelector("[data-accw-lead-status]");
 
 			if (!messagesEl || !form || !input) {
 				return;
@@ -158,6 +163,8 @@
 			var introText = container.getAttribute("data-accw-intro");
 			var session = null;
 			var isSending = false;
+			var leadShown = false;
+			var leadSubmitted = false;
 
 			function createSession() {
 				return {
@@ -227,6 +234,13 @@
 						at: new Date().toISOString()
 					});
 				}
+
+				if (!leadShown && normalizedRole === "assistant") {
+					leadShown = true;
+					if (leadForm) {
+						leadForm.classList.add("is-visible");
+					}
+				}
 			}
 
 			function resetConversation() {
@@ -284,7 +298,12 @@
 					},
 					meta: {
 						page: window.location.href,
-						title: document.title
+						title: document.title,
+						businessName: CFG.businessName || "",
+						businessLocation: CFG.businessLocation || "",
+						businessPhone: CFG.businessPhone || "",
+						businessEmail: CFG.businessEmail || "",
+						context: CFG.businessContext || ""
 					}
 				};
 
@@ -415,6 +434,91 @@
 
 			if (endBtn) {
 				endBtn.addEventListener("click", handleEndChat);
+			}
+
+			function setLeadStatus(message, isError) {
+				if (!leadStatus) return;
+				leadStatus.textContent = message || "";
+				leadStatus.classList.toggle("is-error", Boolean(isError && message));
+			}
+
+			function buildTranscriptText() {
+				var lines = [];
+				(session.messages || []).forEach(function (m) {
+					var speaker = m.role === "assistant" ? "Assistant" : m.role === "system" ? "System" : "User";
+					lines.push("[" + (m.at || "") + "] " + speaker + ": " + (m.text || ""));
+				});
+				return lines.join("\n");
+			}
+
+			function sendLeadPayload(payload) {
+				return fetch(CFG.forwardTranscriptUrl, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json"
+					},
+					body: JSON.stringify(payload)
+				}).then(function (response) {
+					if (!response.ok) {
+						throw new Error("Lead API error (" + response.status + ")");
+					}
+					return response.json().catch(function () {
+						return {};
+					});
+				});
+			}
+
+			if (leadForm) {
+				leadForm.addEventListener("submit", function (event) {
+					event.preventDefault();
+					if (leadSubmitted) {
+						setLeadStatus("Details already sent.", false);
+						return;
+					}
+					if (!CFG.forwardTranscriptUrl) {
+						setLeadStatus("Lead capture unavailable.", true);
+						return;
+					}
+
+					var nameVal = (leadName && leadName.value || "").trim();
+					var emailVal = (leadEmail && leadEmail.value || "").trim();
+					var phoneVal = (leadPhone && leadPhone.value || "").trim();
+
+					if (!nameVal || !emailVal || !phoneVal) {
+						setLeadStatus("Please fill name, email, and phone.", true);
+						return;
+					}
+
+					setLeadStatus("Sending...", false);
+
+					var transcriptText = buildTranscriptText();
+					var payload = {
+						clientId: CFG.clientId || "",
+						token: CFG.forwardToken || "",
+						sessionId: session ? session.id : "",
+						name: nameVal,
+						email: emailVal,
+						phone: phoneVal,
+						transcript: transcriptText,
+						meta: {
+							page: window.location.href,
+							title: document.title
+						}
+					};
+
+					sendLeadPayload(payload)
+						.then(function () {
+							leadSubmitted = true;
+							setLeadStatus("Thanks! We’ve got your details.", false);
+							if (leadForm) {
+								leadForm.classList.remove("is-visible");
+							}
+						})
+						.catch(function (err) {
+							console.error("[ACCW lead]", err);
+							setLeadStatus("Could not send details. Please try again.", true);
+						});
+				});
 			}
 
 			input.addEventListener("keydown", function (event) {
