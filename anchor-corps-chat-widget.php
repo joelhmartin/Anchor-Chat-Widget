@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.2.1
+ * Version: 2.2.2
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -312,6 +312,19 @@ function accw_admin_enqueue_scripts( $hook ) {
 		'4.1.0',
 		true
 	);
+
+	wp_enqueue_script(
+		'accw-rag-admin',
+		ACCW_PLUGIN_URL . 'assets/js/rag-admin.js',
+		array( 'jquery' ),
+		ACCW_PLUGIN_VERSION,
+		true
+	);
+
+	wp_localize_script( 'accw-rag-admin', 'accwRag', array(
+		'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+		'nonce'   => wp_create_nonce( 'accw_rag_nonce' ),
+	) );
 }
 add_action( 'admin_enqueue_scripts', 'accw_admin_enqueue_scripts' );
 
@@ -577,6 +590,73 @@ function accw_render_settings_page() {
 
 			<?php submit_button(); ?>
 		</form>
+
+		<hr />
+		<h2><?php esc_html_e( 'Knowledge Base', 'anchor-corps-chat-widget' ); ?></h2>
+		<p class="description">
+			<?php esc_html_e( 'Upload documents (PDF, TXT, HTML, CSV, DOCX) to train the chat assistant with practice-specific knowledge. The assistant will use these documents to answer patient questions more accurately.', 'anchor-corps-chat-widget' ); ?>
+		</p>
+
+		<?php if ( empty( get_option( 'accw_client_id', '' ) ) ) : ?>
+			<div class="notice notice-warning inline" style="margin:12px 0;">
+				<p><?php esc_html_e( 'Set a Client Account ID above before using the Knowledge Base.', 'anchor-corps-chat-widget' ); ?></p>
+			</div>
+		<?php else : ?>
+
+		<div id="accw-rag-app">
+			<!-- Status -->
+			<div id="accw-rag-status" style="margin:12px 0;">
+				<span class="spinner is-active" style="float:none;margin:0 8px 0 0;"></span>
+				<?php esc_html_e( 'Checking knowledge base status…', 'anchor-corps-chat-widget' ); ?>
+			</div>
+
+			<!-- Enable / Disable buttons -->
+			<div id="accw-rag-controls" style="margin:12px 0; display:none;">
+				<button type="button" class="button button-primary" id="accw-rag-enable">
+					<?php esc_html_e( 'Enable Knowledge Base', 'anchor-corps-chat-widget' ); ?>
+				</button>
+				<button type="button" class="button button-link-delete" id="accw-rag-disable" style="display:none;">
+					<?php esc_html_e( 'Delete Knowledge Base', 'anchor-corps-chat-widget' ); ?>
+				</button>
+			</div>
+
+			<!-- Upload form (visible only when corpus exists) -->
+			<div id="accw-rag-upload-section" style="display:none; margin:16px 0;">
+				<h3><?php esc_html_e( 'Upload Document', 'anchor-corps-chat-widget' ); ?></h3>
+				<form id="accw-rag-upload-form" enctype="multipart/form-data">
+					<input type="file" id="accw-rag-file" name="file"
+						   accept=".pdf,.txt,.html,.csv,.docx" />
+					<button type="submit" class="button button-primary" id="accw-rag-upload-btn">
+						<?php esc_html_e( 'Upload & Import', 'anchor-corps-chat-widget' ); ?>
+					</button>
+					<span class="spinner" id="accw-rag-upload-spinner" style="float:none;margin:0 0 0 8px;"></span>
+				</form>
+				<p class="description">
+					<?php esc_html_e( 'Max 10 MB. Supported: PDF, TXT, HTML, CSV, DOCX. Files are processed and indexed — this may take a minute.', 'anchor-corps-chat-widget' ); ?>
+				</p>
+				<div id="accw-rag-upload-status" style="margin:8px 0;"></div>
+			</div>
+
+			<!-- File list (visible only when corpus exists) -->
+			<div id="accw-rag-files-section" style="display:none; margin:16px 0;">
+				<h3><?php esc_html_e( 'Uploaded Documents', 'anchor-corps-chat-widget' ); ?></h3>
+				<table class="wp-list-table widefat striped" id="accw-rag-files-table">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Document', 'anchor-corps-chat-widget' ); ?></th>
+							<th><?php esc_html_e( 'Size', 'anchor-corps-chat-widget' ); ?></th>
+							<th><?php esc_html_e( 'Added', 'anchor-corps-chat-widget' ); ?></th>
+							<th><?php esc_html_e( 'Actions', 'anchor-corps-chat-widget' ); ?></th>
+						</tr>
+					</thead>
+					<tbody id="accw-rag-files-body">
+						<tr><td colspan="4"><?php esc_html_e( 'Loading…', 'anchor-corps-chat-widget' ); ?></td></tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
+
+		<?php endif; ?>
 	</div>
 	<?php
 }
@@ -921,3 +1001,321 @@ function accw_root_css_vars() {
 	wp_add_inline_style( 'accw-chat-widget', $css );
 }
 add_action( 'wp_enqueue_scripts', 'accw_root_css_vars', 6 );
+
+// ── RAG Knowledge Base admin ────────────────────────────────────────
+
+/**
+ * Derive the Cloud Run base URL from the chat API URL.
+ *
+ * @return string Base URL without trailing slash, or empty string.
+ */
+function accw_cloud_run_base_url() {
+	$settings = accw_get_settings();
+	$api_url  = $settings['apiUrl'] ?? '';
+	if ( ! $api_url ) {
+		return '';
+	}
+	// Strip the /chat path to get base URL.
+	$parsed = wp_parse_url( $api_url );
+	if ( empty( $parsed['scheme'] ) || empty( $parsed['host'] ) ) {
+		return '';
+	}
+	return $parsed['scheme'] . '://' . $parsed['host'];
+}
+
+/**
+ * Make an authenticated request to a Cloud Run RAG endpoint.
+ *
+ * @param string $method  HTTP method.
+ * @param string $path    Path relative to base URL (e.g. "/rag/status").
+ * @param array  $args    Query params for GET, body params for POST/DELETE.
+ * @return array|WP_Error Decoded JSON response or WP_Error.
+ */
+function accw_rag_request( $method, $path, $args = array() ) {
+	$base = accw_cloud_run_base_url();
+	if ( ! $base ) {
+		return new WP_Error( 'no_base_url', 'Cloud Run API URL is not configured.' );
+	}
+
+	$settings = accw_get_settings();
+	$token    = $settings['forwardToken'] ?? '';
+
+	$url      = $base . $path;
+	$method   = strtoupper( $method );
+
+	if ( 'GET' === $method ) {
+		$args['token'] = $token;
+		$url           = add_query_arg( $args, $url );
+		$response      = wp_remote_get( $url, array( 'timeout' => 120 ) );
+	} else {
+		$args['token'] = $token;
+		$response      = wp_remote_request(
+			$url,
+			array(
+				'method'  => $method,
+				'timeout' => 120,
+				'headers' => array( 'Content-Type' => 'application/json' ),
+				'body'    => wp_json_encode( $args ),
+			)
+		);
+	}
+
+	if ( is_wp_error( $response ) ) {
+		return $response;
+	}
+
+	$code = wp_remote_retrieve_response_code( $response );
+	$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+	if ( $code >= 400 ) {
+		$msg = isset( $body['error'] ) ? $body['error'] : "HTTP $code";
+		return new WP_Error( 'rag_api_error', $msg, array( 'status' => $code ) );
+	}
+
+	return $body ?: array();
+}
+
+/**
+ * Upload a file to the Cloud Run RAG endpoint via multipart POST.
+ *
+ * @param string $file_path     Temporary file path.
+ * @param string $file_name     Original file name.
+ * @param string $file_type     MIME type.
+ * @param string $client_id     Client ID.
+ * @return array|WP_Error
+ */
+function accw_rag_upload_file( $file_path, $file_name, $file_type, $client_id ) {
+	$base = accw_cloud_run_base_url();
+	if ( ! $base ) {
+		return new WP_Error( 'no_base_url', 'Cloud Run API URL is not configured.' );
+	}
+
+	$settings = accw_get_settings();
+	$token    = $settings['forwardToken'] ?? '';
+
+	$boundary = wp_generate_password( 24, false );
+	$body     = '';
+
+	// token field.
+	$body .= "--{$boundary}\r\n";
+	$body .= "Content-Disposition: form-data; name=\"token\"\r\n\r\n";
+	$body .= $token . "\r\n";
+
+	// clientId field.
+	$body .= "--{$boundary}\r\n";
+	$body .= "Content-Disposition: form-data; name=\"clientId\"\r\n\r\n";
+	$body .= $client_id . "\r\n";
+
+	// file field.
+	$body .= "--{$boundary}\r\n";
+	$body .= "Content-Disposition: form-data; name=\"file\"; filename=\"" . $file_name . "\"\r\n";
+	$body .= "Content-Type: " . $file_type . "\r\n\r\n";
+	$body .= file_get_contents( $file_path ) . "\r\n"; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+	$body .= "--{$boundary}--\r\n";
+
+	$response = wp_remote_post(
+		$base . '/rag/files',
+		array(
+			'timeout' => 120,
+			'headers' => array(
+				'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
+			),
+			'body'    => $body,
+		)
+	);
+
+	if ( is_wp_error( $response ) ) {
+		return $response;
+	}
+
+	$code      = wp_remote_retrieve_response_code( $response );
+	$resp_body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+	if ( $code >= 400 ) {
+		$msg = isset( $resp_body['error'] ) ? $resp_body['error'] : "HTTP $code";
+		return new WP_Error( 'rag_upload_error', $msg, array( 'status' => $code ) );
+	}
+
+	return $resp_body ?: array();
+}
+
+// ── AJAX handlers ───────────────────────────────────────────────────
+
+/**
+ * AJAX: Get RAG status for this client.
+ */
+function accw_ajax_rag_status() {
+	check_ajax_referer( 'accw_rag_nonce', 'nonce' );
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( 'Unauthorized', 403 );
+	}
+
+	$client_id = get_option( 'accw_client_id', '' );
+	if ( ! $client_id ) {
+		wp_send_json_error( 'Client ID not configured.' );
+	}
+
+	$result = accw_rag_request( 'GET', '/rag/status', array( 'clientId' => $client_id ) );
+	if ( is_wp_error( $result ) ) {
+		wp_send_json_error( $result->get_error_message() );
+	}
+
+	wp_send_json_success( $result );
+}
+add_action( 'wp_ajax_accw_rag_status', 'accw_ajax_rag_status' );
+
+/**
+ * AJAX: Create a RAG corpus for this client.
+ */
+function accw_ajax_rag_create_corpus() {
+	check_ajax_referer( 'accw_rag_nonce', 'nonce' );
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( 'Unauthorized', 403 );
+	}
+
+	$client_id = get_option( 'accw_client_id', '' );
+	$biz_name  = get_option( 'accw_business_name', 'Knowledge Base' );
+	if ( ! $client_id ) {
+		wp_send_json_error( 'Client ID not configured.' );
+	}
+
+	$result = accw_rag_request( 'POST', '/rag/corpus', array(
+		'clientId' => $client_id,
+		'name'     => $biz_name,
+	) );
+
+	if ( is_wp_error( $result ) ) {
+		wp_send_json_error( $result->get_error_message() );
+	}
+
+	wp_send_json_success( $result );
+}
+add_action( 'wp_ajax_accw_rag_create_corpus', 'accw_ajax_rag_create_corpus' );
+
+/**
+ * AJAX: Delete the RAG corpus for this client.
+ */
+function accw_ajax_rag_delete_corpus() {
+	check_ajax_referer( 'accw_rag_nonce', 'nonce' );
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( 'Unauthorized', 403 );
+	}
+
+	$client_id = get_option( 'accw_client_id', '' );
+	if ( ! $client_id ) {
+		wp_send_json_error( 'Client ID not configured.' );
+	}
+
+	$result = accw_rag_request( 'DELETE', '/rag/corpus', array(
+		'clientId' => $client_id,
+	) );
+
+	if ( is_wp_error( $result ) ) {
+		wp_send_json_error( $result->get_error_message() );
+	}
+
+	wp_send_json_success( $result );
+}
+add_action( 'wp_ajax_accw_rag_delete_corpus', 'accw_ajax_rag_delete_corpus' );
+
+/**
+ * AJAX: Upload a file to the RAG corpus.
+ */
+function accw_ajax_rag_upload_file() {
+	check_ajax_referer( 'accw_rag_nonce', 'nonce' );
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( 'Unauthorized', 403 );
+	}
+
+	$client_id = get_option( 'accw_client_id', '' );
+	if ( ! $client_id ) {
+		wp_send_json_error( 'Client ID not configured.' );
+	}
+
+	if ( empty( $_FILES['file'] ) ) {
+		wp_send_json_error( 'No file uploaded.' );
+	}
+
+	$file = $_FILES['file'];
+	if ( $file['error'] !== UPLOAD_ERR_OK ) {
+		wp_send_json_error( 'Upload error code: ' . $file['error'] );
+	}
+
+	$allowed = array(
+		'application/pdf',
+		'text/plain',
+		'text/html',
+		'text/csv',
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+	);
+	if ( ! in_array( $file['type'], $allowed, true ) ) {
+		wp_send_json_error( 'Unsupported file type: ' . $file['type'] );
+	}
+
+	if ( $file['size'] > 10 * 1024 * 1024 ) {
+		wp_send_json_error( 'File too large. Maximum 10 MB.' );
+	}
+
+	$result = accw_rag_upload_file( $file['tmp_name'], $file['name'], $file['type'], $client_id );
+	if ( is_wp_error( $result ) ) {
+		wp_send_json_error( $result->get_error_message() );
+	}
+
+	wp_send_json_success( $result );
+}
+add_action( 'wp_ajax_accw_rag_upload_file', 'accw_ajax_rag_upload_file' );
+
+/**
+ * AJAX: List files in the RAG corpus.
+ */
+function accw_ajax_rag_list_files() {
+	check_ajax_referer( 'accw_rag_nonce', 'nonce' );
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( 'Unauthorized', 403 );
+	}
+
+	$client_id = get_option( 'accw_client_id', '' );
+	if ( ! $client_id ) {
+		wp_send_json_error( 'Client ID not configured.' );
+	}
+
+	$result = accw_rag_request( 'GET', '/rag/files', array( 'clientId' => $client_id ) );
+	if ( is_wp_error( $result ) ) {
+		wp_send_json_error( $result->get_error_message() );
+	}
+
+	wp_send_json_success( $result );
+}
+add_action( 'wp_ajax_accw_rag_list_files', 'accw_ajax_rag_list_files' );
+
+/**
+ * AJAX: Delete a file from the RAG corpus.
+ */
+function accw_ajax_rag_delete_file() {
+	check_ajax_referer( 'accw_rag_nonce', 'nonce' );
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( 'Unauthorized', 403 );
+	}
+
+	$client_id    = get_option( 'accw_client_id', '' );
+	$rag_file_name = isset( $_POST['ragFileName'] ) ? sanitize_text_field( wp_unslash( $_POST['ragFileName'] ) ) : '';
+
+	if ( ! $client_id ) {
+		wp_send_json_error( 'Client ID not configured.' );
+	}
+	if ( ! $rag_file_name ) {
+		wp_send_json_error( 'Missing ragFileName.' );
+	}
+
+	$result = accw_rag_request( 'DELETE', '/rag/files', array(
+		'clientId'    => $client_id,
+		'ragFileName' => $rag_file_name,
+	) );
+
+	if ( is_wp_error( $result ) ) {
+		wp_send_json_error( $result->get_error_message() );
+	}
+
+	wp_send_json_success( $result );
+}
+add_action( 'wp_ajax_accw_rag_delete_file', 'accw_ajax_rag_delete_file' );
