@@ -468,11 +468,11 @@ function accw_get_settings() {
 			?: get_option( 'accw_helper_text', 'Hi, how can we help?' ),
 		// Fixed backend endpoints with optional env overrides.
 		'apiUrl'               => accw_get_env( 'ACCW_API_URL' )
-			?: 'https://ai-endpoint-406510042833.europe-west1.run.app/chat',
+			?: 'https://ai-endpoint-kqikza7ska-ew.a.run.app/chat',
 		'apiAuthToken'         => accw_get_env( 'ACCW_API_AUTH_TOKEN' )
 			?: '', // keep token in env only
 		'forwardTranscriptUrl' => accw_get_env( 'ACCW_FORWARD_TRANSCRIPT_URL' )
-			?: 'https://ai-endpoint-406510042833.europe-west1.run.app/lead',
+			?: 'https://ai-endpoint-kqikza7ska-ew.a.run.app/lead',
 		'clientId'             => accw_get_env( 'ACCW_CLIENT_ID' )
 			?: get_option( 'accw_client_id', '' ),
 		// Forward token must match FORWARD_TOKEN on Cloud Run.
