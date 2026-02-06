@@ -140,45 +140,77 @@
 		});
 	});
 
-	// Upload file.
+	// Upload file(s).
 	$uploadForm.on("submit", function (e) {
 		e.preventDefault();
 		var fileInput = document.getElementById("accw-rag-file");
 		if (!fileInput || !fileInput.files.length) {
-			$uploadMsg.html('<span style="color:#d63638;">Please select a file.</span>');
+			$uploadMsg.html('<span style="color:#d63638;">Please select one or more files.</span>');
 			return;
 		}
 
-		var formData = new FormData();
-		formData.append("action", "accw_rag_upload_file");
-		formData.append("nonce", accwRag.nonce);
-		formData.append("file", fileInput.files[0]);
+		var files = Array.prototype.slice.call(fileInput.files);
+		var total = files.length;
+		var succeeded = 0;
+		var failed = [];
 
 		$uploadBtn.prop("disabled", true);
 		$uploadSpin.addClass("is-active");
-		$uploadMsg.html("Uploading and processing… this may take a minute.");
 
-		$.ajax({
-			url: accwRag.ajaxUrl,
-			type: "POST",
-			data: formData,
-			processData: false,
-			contentType: false,
-			timeout: 120000,
-		}).done(function (res) {
-			if (res.success) {
-				$uploadMsg.html('<span style="color:#00a32a;">Document imported successfully.</span>');
+		function uploadNext(index) {
+			if (index >= total) {
+				// All files processed — show summary.
+				$uploadSpin.removeClass("is-active");
+				$uploadBtn.prop("disabled", false);
 				fileInput.value = "";
 				loadFiles();
-			} else {
-				$uploadMsg.html('<span style="color:#d63638;">Error: ' + (res.data || "unknown") + "</span>");
+
+				if (failed.length === 0) {
+					$uploadMsg.html(
+						'<span style="color:#00a32a;">' +
+						total + " of " + total + " document" + (total > 1 ? "s" : "") + " imported successfully.</span>"
+					);
+				} else {
+					$uploadMsg.html(
+						'<span style="color:#d63638;">' +
+						succeeded + " of " + total + " imported. " +
+						failed.length + " failed: " + failed.join(", ") + "</span>"
+					);
+				}
+				return;
 			}
-		}).fail(function () {
-			$uploadMsg.html('<span style="color:#d63638;">Upload failed. Check file size and type.</span>');
-		}).always(function () {
-			$uploadBtn.prop("disabled", false);
-			$uploadSpin.removeClass("is-active");
-		});
+
+			var file = files[index];
+			$uploadMsg.html(
+				"Uploading " + (index + 1) + " of " + total + ": " + file.name + "…"
+			);
+
+			var formData = new FormData();
+			formData.append("action", "accw_rag_upload_file");
+			formData.append("nonce", accwRag.nonce);
+			formData.append("file", file);
+
+			$.ajax({
+				url: accwRag.ajaxUrl,
+				type: "POST",
+				data: formData,
+				processData: false,
+				contentType: false,
+				timeout: 120000,
+			}).done(function (res) {
+				if (res.success) {
+					succeeded++;
+				} else {
+					failed.push(file.name);
+				}
+			}).fail(function () {
+				failed.push(file.name);
+			}).always(function () {
+				uploadNext(index + 1);
+			});
+		}
+
+		uploadNext(0);
 	});
 
 	// Delete file (delegated).

@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.2.3
+ * Version: 2.2.4
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -622,17 +622,17 @@ function accw_render_settings_page() {
 
 			<!-- Upload form (visible only when corpus exists) -->
 			<div id="accw-rag-upload-section" style="display:none; margin:16px 0;">
-				<h3><?php esc_html_e( 'Upload Document', 'anchor-corps-chat-widget' ); ?></h3>
+				<h3><?php esc_html_e( 'Upload Documents', 'anchor-corps-chat-widget' ); ?></h3>
 				<form id="accw-rag-upload-form" enctype="multipart/form-data">
 					<input type="file" id="accw-rag-file" name="file"
-						   accept=".pdf,.txt,.html,.csv,.docx" />
+						   accept=".pdf,.txt,.html,.csv,.docx" multiple />
 					<button type="submit" class="button button-primary" id="accw-rag-upload-btn">
 						<?php esc_html_e( 'Upload & Import', 'anchor-corps-chat-widget' ); ?>
 					</button>
 					<span class="spinner" id="accw-rag-upload-spinner" style="float:none;margin:0 0 0 8px;"></span>
 				</form>
 				<p class="description">
-					<?php esc_html_e( 'Max 10 MB. Supported: PDF, TXT, HTML, CSV, DOCX. Files are processed and indexed — this may take a minute.', 'anchor-corps-chat-widget' ); ?>
+					<?php esc_html_e( 'Max 10 MB per file. Supported: PDF, TXT, HTML, CSV, DOCX. Select multiple files to upload at once. Files are processed and indexed — this may take a minute.', 'anchor-corps-chat-widget' ); ?>
 				</p>
 				<div id="accw-rag-upload-status" style="margin:8px 0;"></div>
 			</div>
