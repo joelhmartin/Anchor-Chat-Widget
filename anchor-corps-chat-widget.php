@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.1.7
+ * Version: 2.2.0
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -264,6 +264,27 @@ function accw_register_settings() {
 			'default'           => 'bottom-right',
 		)
 	);
+
+	// Display visibility settings.
+	register_setting(
+		'accw_settings',
+		'accw_display_mode',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_text_field',
+			'default'           => 'disabled',
+		)
+	);
+
+	register_setting(
+		'accw_settings',
+		'accw_display_pages',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_textarea_field',
+			'default'           => '',
+		)
+	);
 }
 add_action( 'admin_init', 'accw_register_settings' );
 
@@ -436,8 +457,59 @@ function accw_render_settings_page() {
 							</select>
 						</td>
 					</tr>
+
+					<tr>
+						<th scope="row">
+							<label for="accw_display_mode"><?php esc_html_e( 'Display visibility', 'anchor-corps-chat-widget' ); ?></label>
+						</th>
+						<td>
+							<select id="accw_display_mode" name="accw_display_mode">
+								<?php
+								$current_mode = get_option( 'accw_display_mode', 'disabled' );
+								$mode_options = array(
+									'disabled'   => __( 'Disabled (widget hidden everywhere)', 'anchor-corps-chat-widget' ),
+									'everywhere' => __( 'Enabled on all pages', 'anchor-corps-chat-widget' ),
+									'only'       => __( 'Only on specific pages', 'anchor-corps-chat-widget' ),
+									'except'     => __( 'Everywhere except specific pages', 'anchor-corps-chat-widget' ),
+								);
+								foreach ( $mode_options as $value => $label ) :
+									?>
+									<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $current_mode, $value ); ?>>
+										<?php echo esc_html( $label ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+							<p class="description">
+								<?php esc_html_e( 'Control where the chat widget appears on your site.', 'anchor-corps-chat-widget' ); ?>
+							</p>
+						</td>
+					</tr>
+
+					<tr id="accw_display_pages_row" style="<?php echo in_array( $current_mode, array( 'only', 'except' ), true ) ? '' : 'display:none;'; ?>">
+						<th scope="row">
+							<label for="accw_display_pages"><?php esc_html_e( 'Page paths', 'anchor-corps-chat-widget' ); ?></label>
+						</th>
+						<td>
+							<textarea class="large-text code" rows="5" id="accw_display_pages" name="accw_display_pages"><?php echo esc_textarea( get_option( 'accw_display_pages', '' ) ); ?></textarea>
+							<p class="description">
+								<?php esc_html_e( 'Enter one path per line. Use URL paths like /contact/ or /services/dental/. Wildcards supported: /blog/* matches all blog pages.', 'anchor-corps-chat-widget' ); ?>
+							</p>
+						</td>
+					</tr>
 				</tbody>
 			</table>
+
+			<script>
+			(function() {
+				var modeSelect = document.getElementById('accw_display_mode');
+				var pagesRow = document.getElementById('accw_display_pages_row');
+				if (modeSelect && pagesRow) {
+					modeSelect.addEventListener('change', function() {
+						pagesRow.style.display = (this.value === 'only' || this.value === 'except') ? '' : 'none';
+					});
+				}
+			})();
+			</script>
 
 			<?php submit_button(); ?>
 		</form>
@@ -511,10 +583,67 @@ function accw_get_settings() {
 }
 
 /**
+ * Check if the widget should be displayed on the current page.
+ *
+ * @return bool
+ */
+function accw_should_display() {
+	$mode = get_option( 'accw_display_mode', 'disabled' );
+
+	// Disabled mode - never show.
+	if ( 'disabled' === $mode ) {
+		return false;
+	}
+
+	// Everywhere mode - always show.
+	if ( 'everywhere' === $mode ) {
+		return true;
+	}
+
+	// Get current request path.
+	$current_path = isset( $_SERVER['REQUEST_URI'] ) ? wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ) : '/';
+	$current_path = trailingslashit( $current_path );
+
+	// Parse the page paths setting.
+	$pages_raw = get_option( 'accw_display_pages', '' );
+	$pages     = array_filter( array_map( 'trim', explode( "\n", $pages_raw ) ) );
+
+	if ( empty( $pages ) ) {
+		// No pages specified: 'only' mode shows nothing, 'except' mode shows everywhere.
+		return 'except' === $mode;
+	}
+
+	// Check if current path matches any pattern.
+	$matches = false;
+	foreach ( $pages as $pattern ) {
+		$pattern = trailingslashit( trim( $pattern ) );
+
+		// Convert wildcard pattern to regex.
+		if ( false !== strpos( $pattern, '*' ) ) {
+			$regex = '#^' . str_replace( '\*', '.*', preg_quote( $pattern, '#' ) ) . '$#i';
+			if ( preg_match( $regex, $current_path ) ) {
+				$matches = true;
+				break;
+			}
+		} elseif ( $current_path === $pattern ) {
+			$matches = true;
+			break;
+		}
+	}
+
+	// 'only' mode: show if matches. 'except' mode: show if doesn't match.
+	return 'only' === $mode ? $matches : ! $matches;
+}
+
+/**
  * Enqueue styles and scripts globally on the front end.
  */
 function accw_enqueue_assets() {
 	if ( is_admin() ) {
+		return;
+	}
+
+	if ( ! accw_should_display() ) {
 		return;
 	}
 	$settings = accw_get_settings();
@@ -570,6 +699,10 @@ add_action( 'wp_enqueue_scripts', 'accw_enqueue_assets', 5 );
  */
 function accw_render_widget() {
 	if ( is_admin() ) {
+		return;
+	}
+
+	if ( ! accw_should_display() ) {
 		return;
 	}
 	$settings = accw_get_settings();
