@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.1.8
+ * Version: 2.2.0
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -289,6 +289,33 @@ function accw_register_settings() {
 add_action( 'admin_init', 'accw_register_settings' );
 
 /**
+ * Enqueue Select2 on the plugin settings page.
+ *
+ * @param string $hook The current admin page hook.
+ */
+function accw_admin_enqueue_scripts( $hook ) {
+	if ( 'settings_page_accw-settings' !== $hook ) {
+		return;
+	}
+
+	wp_enqueue_style(
+		'select2',
+		'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
+		array(),
+		'4.1.0'
+	);
+
+	wp_enqueue_script(
+		'select2',
+		'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
+		array( 'jquery' ),
+		'4.1.0',
+		true
+	);
+}
+add_action( 'admin_enqueue_scripts', 'accw_admin_enqueue_scripts' );
+
+/**
  * Add settings page under "Settings".
  */
 function accw_add_settings_page() {
@@ -487,12 +514,35 @@ function accw_render_settings_page() {
 
 					<tr id="accw_display_pages_row" style="<?php echo in_array( $current_mode, array( 'only', 'except' ), true ) ? '' : 'display:none;'; ?>">
 						<th scope="row">
-							<label for="accw_display_pages"><?php esc_html_e( 'Page paths', 'anchor-corps-chat-widget' ); ?></label>
+							<label for="accw_display_pages"><?php esc_html_e( 'Select pages', 'anchor-corps-chat-widget' ); ?></label>
 						</th>
 						<td>
-							<textarea class="large-text code" rows="5" id="accw_display_pages" name="accw_display_pages"><?php echo esc_textarea( get_option( 'accw_display_pages', '' ) ); ?></textarea>
+							<?php
+							$saved_pages = array_filter( array_map( 'trim', explode( "\n", get_option( 'accw_display_pages', '' ) ) ) );
+							$all_pages   = get_posts(
+								array(
+									'post_type'      => array( 'page', 'post' ),
+									'post_status'    => 'publish',
+									'posts_per_page' => -1,
+									'orderby'        => 'title',
+									'order'          => 'ASC',
+								)
+							);
+							?>
+							<select id="accw_display_pages_select" multiple="multiple" style="width: 100%; max-width: 400px;">
+								<?php foreach ( $all_pages as $page ) :
+									$path = wp_parse_url( get_permalink( $page ), PHP_URL_PATH );
+									$path = trailingslashit( $path );
+									$selected = in_array( $path, $saved_pages, true ) ? 'selected' : '';
+								?>
+									<option value="<?php echo esc_attr( $path ); ?>" <?php echo $selected; ?>>
+										<?php echo esc_html( $page->post_title ); ?> (<?php echo esc_html( $path ); ?>)
+									</option>
+								<?php endforeach; ?>
+							</select>
+							<input type="hidden" id="accw_display_pages" name="accw_display_pages" value="<?php echo esc_attr( get_option( 'accw_display_pages', '' ) ); ?>" />
 							<p class="description">
-								<?php esc_html_e( 'Enter one path per line. Use URL paths like /contact/ or /services/dental/. Wildcards supported: /blog/* matches all blog pages.', 'anchor-corps-chat-widget' ); ?>
+								<?php esc_html_e( 'Search and select pages where the widget should appear (or be hidden).', 'anchor-corps-chat-widget' ); ?>
 							</p>
 						</td>
 					</tr>
@@ -500,7 +550,21 @@ function accw_render_settings_page() {
 			</table>
 
 			<script>
-			(function() {
+			jQuery(document).ready(function($) {
+				// Initialize Select2 on the pages dropdown.
+				$('#accw_display_pages_select').select2({
+					placeholder: '<?php echo esc_js( __( 'Search for pages...', 'anchor-corps-chat-widget' ) ); ?>',
+					allowClear: true,
+					width: '100%'
+				});
+
+				// Sync Select2 selections to hidden input.
+				$('#accw_display_pages_select').on('change', function() {
+					var selected = $(this).val() || [];
+					$('#accw_display_pages').val(selected.join("\n"));
+				});
+
+				// Toggle pages row visibility based on mode.
 				var modeSelect = document.getElementById('accw_display_mode');
 				var pagesRow = document.getElementById('accw_display_pages_row');
 				if (modeSelect && pagesRow) {
@@ -508,7 +572,7 @@ function accw_render_settings_page() {
 						pagesRow.style.display = (this.value === 'only' || this.value === 'except') ? '' : 'none';
 					});
 				}
-			})();
+			});
 			</script>
 
 			<?php submit_button(); ?>
