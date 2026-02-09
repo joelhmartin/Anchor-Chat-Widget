@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.2.5
+ * Version: 2.2.6
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -227,6 +227,17 @@ function accw_register_settings() {
 		)
 	);
 
+	// Logo URL.
+	register_setting(
+		'accw_settings',
+		'accw_logo_url',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'esc_url_raw',
+			'default'           => '',
+		)
+	);
+
 	// Accent color.
 	register_setting(
 		'accw_settings',
@@ -282,6 +293,7 @@ function accw_admin_enqueue_scripts( $hook ) {
 		return;
 	}
 
+	wp_enqueue_media();
 	wp_enqueue_style( 'wp-color-picker' );
 	wp_enqueue_script( 'wp-color-picker' );
 
@@ -452,6 +464,26 @@ function accw_render_settings_page() {
 
 					<tr>
 						<th scope="row">
+							<label for="accw_logo_url"><?php esc_html_e( 'Logo image', 'anchor-corps-chat-widget' ); ?></label>
+						</th>
+						<td>
+							<input type="text" class="regular-text" id="accw_logo_url" name="accw_logo_url"
+								   value="<?php echo esc_attr( get_option( 'accw_logo_url', '' ) ); ?>" />
+							<button type="button" class="button" id="accw_logo_upload"><?php esc_html_e( 'Upload', 'anchor-corps-chat-widget' ); ?></button>
+							<?php $logo_preview = get_option( 'accw_logo_url', '' ); ?>
+							<div id="accw_logo_preview" style="margin-top:10px;">
+								<?php if ( $logo_preview ) : ?>
+									<img src="<?php echo esc_url( $logo_preview ); ?>" style="max-height:60px;" />
+								<?php endif; ?>
+							</div>
+							<p class="description">
+								<?php esc_html_e( 'Logo displayed in the chat header. Use Upload to pick from the media library, or paste a URL.', 'anchor-corps-chat-widget' ); ?>
+							</p>
+						</td>
+					</tr>
+
+					<tr>
+						<th scope="row">
 							<label for="accw_position"><?php esc_html_e( 'Widget position', 'anchor-corps-chat-widget' ); ?></label>
 						</th>
 						<td>
@@ -572,6 +604,18 @@ function accw_render_settings_page() {
 			jQuery(document).ready(function($) {
 				// Initialize color picker.
 				$('#accw_accent_color').wpColorPicker();
+
+				// Logo media uploader.
+				$('#accw_logo_upload').on('click', function(e) {
+					e.preventDefault();
+					var frame = wp.media({ title: 'Select Logo', multiple: false, library: { type: 'image' } });
+					frame.on('select', function() {
+						var attachment = frame.state().get('selection').first().toJSON();
+						$('#accw_logo_url').val(attachment.url);
+						$('#accw_logo_preview').html('<img src="' + attachment.url + '" style="max-height:60px;" />');
+					});
+					frame.open();
+				});
 
 				// Initialize Select2 on the pages dropdown.
 				$('#accw_display_pages_select').select2({
@@ -798,18 +842,21 @@ function accw_enqueue_assets() {
 		return;
 	}
 	$settings = accw_get_settings();
+	$css_ver = (string) filemtime( ACCW_PLUGIN_DIR . 'assets/css/chat-widget.css' );
+	$js_ver  = (string) filemtime( ACCW_PLUGIN_DIR . 'assets/js/chat-widget.js' );
+
 	wp_enqueue_style(
 		'accw-chat-widget',
 		ACCW_PLUGIN_URL . 'assets/css/chat-widget.css',
 		array(),
-		ACCW_PLUGIN_VERSION
+		$css_ver
 	);
 
 	wp_enqueue_script(
 		'accw-chat-widget',
 		ACCW_PLUGIN_URL . 'assets/js/chat-widget.js',
 		array(),
-		ACCW_PLUGIN_VERSION,
+		$js_ver,
 		true
 	);
 
@@ -857,10 +904,8 @@ function accw_render_widget() {
 	}
 	$settings = accw_get_settings();
 
-	$logo_url = apply_filters(
-		'accw_logo_url',
-		'https://tmjsleepkc.com/wp-content/uploads/2025/09/Small_Logo_SVG_TMJ_INT@2x.webp'
-	);
+	$logo_url = get_option( 'accw_logo_url', '' );
+	$logo_url = apply_filters( 'accw_logo_url', $logo_url );
 
 	$chatbody = do_shortcode( '[anchor_chatbot]' );
 	if ( empty( $chatbody ) && current_user_can( 'manage_options' ) ) {
@@ -881,11 +926,13 @@ function accw_render_widget() {
 
 		<div class="chat-window" id="chatWindow" role="dialog" aria-modal="false" aria-labelledby="accwHeaderTitle">
 			<div class="chat-header">
+				<?php if ( $logo_url ) : ?>
 				<div class="logo-container">
 					<div class="logo-placeholder">
 						<img src="<?php echo esc_url( $logo_url ); ?>" alt="" loading="lazy" decoding="async" />
 					</div>
 				</div>
+				<?php endif; ?>
 				<div class="chat-header-text">
 					<h3 id="accwHeaderTitle"></h3>
 					<p id="accwHeaderSubtitle"></p>
@@ -1002,7 +1049,7 @@ function accw_render_chatbot_shortcode( $atts = array() ) {
  * Output CSS custom properties and optional custom CSS.
  */
 function accw_root_css_vars() {
-	if ( is_admin() ) {
+	if ( is_admin() || ! accw_should_display() ) {
 		return;
 	}
 

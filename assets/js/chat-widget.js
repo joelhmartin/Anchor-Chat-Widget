@@ -92,8 +92,10 @@
 		}
 
 		function handleToggle(e) {
+			if (e && e.__accwHandled) return;
 			if (e) {
 				e.preventDefault();
+				e.stopImmediatePropagation();
 				e.__accwHandled = true;
 			}
 			if (chatWindow.classList.contains("open")) {
