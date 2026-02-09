@@ -3,7 +3,7 @@
  * Plugin Name: Anchor Corps Chat Widget
  * Description: Adds a floating chat widget that renders the [anchor_chatbot] output inside a toggle panel on every page.
  * Author: Anchor Corps
- * Version: 2.2.4
+ * Version: 2.2.5
  * Requires at least: 5.2
  * Requires PHP: 7.2
  */
@@ -35,34 +35,6 @@ function accw_get_env( $name ) {
 	}
 
 	return null;
-}
-
-/**
- * Sanitize a business hours string in the format "HH:MM-HH:MM" or multiple ranges separated by commas.
- *
- * Examples:
- *  - 09:00-17:00
- *  - 09:00-12:00,13:00-17:00
- *
- * Returns an empty string if the format is invalid.
- *
- * @param string $value
- * @return string
- */
-function accw_sanitize_hours( $value ) {
-	$value = is_string( $value ) ? trim( $value ) : '';
-	if ( '' === $value ) {
-		return '';
-	}
-
-	$parts = array_map( 'trim', explode( ',', $value ) );
-	foreach ( $parts as $part ) {
-		if ( ! preg_match( '/^\d{2}:\d{2}-\d{2}:\d{2}$/', $part ) ) {
-			return '';
-		}
-	}
-
-	return implode( ',', $parts );
 }
 
 // Load .env if present.
@@ -214,16 +186,6 @@ function accw_register_settings() {
 		)
 	);
 
-	register_setting(
-		'accw_settings',
-		'accw_business_hours',
-		array(
-			'type'              => 'string',
-			'sanitize_callback' => 'accw_sanitize_hours',
-			'default'           => '',
-		)
-	);
-
 	// Optional UI text settings.
 	register_setting(
 		'accw_settings',
@@ -265,6 +227,28 @@ function accw_register_settings() {
 		)
 	);
 
+	// Accent color.
+	register_setting(
+		'accw_settings',
+		'accw_accent_color',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_hex_color',
+			'default'           => '#6c63ff',
+		)
+	);
+
+	// Custom CSS.
+	register_setting(
+		'accw_settings',
+		'accw_custom_css',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'wp_strip_all_tags',
+			'default'           => '',
+		)
+	);
+
 	// Display visibility settings.
 	register_setting(
 		'accw_settings',
@@ -297,6 +281,9 @@ function accw_admin_enqueue_scripts( $hook ) {
 	if ( 'settings_page_accw-settings' !== $hook ) {
 		return;
 	}
+
+	wp_enqueue_style( 'wp-color-picker' );
+	wp_enqueue_script( 'wp-color-picker' );
 
 	wp_enqueue_style(
 		'select2',
@@ -435,19 +422,6 @@ function accw_render_settings_page() {
 
 					<tr>
 						<th scope="row">
-							<label for="accw_business_hours"><?php esc_html_e( 'Business hours (HH:MM-HH:MM, local time)', 'anchor-corps-chat-widget' ); ?></label>
-						</th>
-						<td>
-							<input type="text" class="regular-text" id="accw_business_hours" name="accw_business_hours"
-								   value="<?php echo esc_attr( get_option( 'accw_business_hours', '' ) ); ?>" />
-							<p class="description">
-								<?php esc_html_e( 'Used to show the call link under the contact form during open hours. Format: HH:MM-HH:MM, or multiple ranges separated by commas (e.g., 09:00-12:00,13:00-17:00).', 'anchor-corps-chat-widget' ); ?>
-							</p>
-						</td>
-					</tr>
-
-					<tr>
-						<th scope="row">
 							<label for="accw_header_title"><?php esc_html_e( 'Header title', 'anchor-corps-chat-widget' ); ?></label>
 						</th>
 						<td>
@@ -495,6 +469,38 @@ function accw_render_settings_page() {
 									</option>
 								<?php endforeach; ?>
 							</select>
+						</td>
+					</tr>
+
+					<tr>
+						<th scope="row">
+							<label for="accw_accent_color"><?php esc_html_e( 'Accent color', 'anchor-corps-chat-widget' ); ?></label>
+						</th>
+						<td>
+							<input type="text" id="accw_accent_color" name="accw_accent_color"
+								   value="<?php echo esc_attr( get_option( 'accw_accent_color', '#6c63ff' ) ); ?>"
+								   data-default-color="#6c63ff" />
+							<p class="description">
+								<?php esc_html_e( 'Primary color used for the chat button, header, user bubbles, and send button.', 'anchor-corps-chat-widget' ); ?>
+							</p>
+						</td>
+					</tr>
+
+					<tr>
+						<th scope="row" valign="top">
+							<label for="accw_custom_css"><?php esc_html_e( 'Custom CSS', 'anchor-corps-chat-widget' ); ?></label>
+						</th>
+						<td>
+							<textarea class="large-text code" rows="14" id="accw_custom_css" name="accw_custom_css"><?php
+								$custom_css = get_option( 'accw_custom_css', '' );
+								if ( '' === $custom_css ) {
+									$custom_css = "/* Widget container (floating position) */\n/* .chat-widget-container { } */\n\n/* Chat toggle button */\n/* .chat-button { } */\n\n/* Chat window */\n/* .chat-window { } */\n\n/* Chat header */\n/* .chat-header { } */\n\n/* Messages area */\n/* .accw-chatbot__messages { } */\n\n/* User message bubble */\n/* .accw-message-user { } */\n\n/* Bot message bubble */\n/* .accw-message-bot { } */\n\n/* Send button */\n/* .accw-btn-primary { } */";
+								}
+								echo esc_textarea( $custom_css );
+							?></textarea>
+							<p class="description">
+								<?php esc_html_e( 'Add custom CSS rules to adjust the widget appearance. Uncomment and edit the selectors above as needed.', 'anchor-corps-chat-widget' ); ?>
+							</p>
 						</td>
 					</tr>
 
@@ -564,6 +570,9 @@ function accw_render_settings_page() {
 
 			<script>
 			jQuery(document).ready(function($) {
+				// Initialize color picker.
+				$('#accw_accent_color').wpColorPicker();
+
 				// Initialize Select2 on the pages dropdown.
 				$('#accw_display_pages_select').select2({
 					placeholder: '<?php echo esc_js( __( 'Search for pages...', 'anchor-corps-chat-widget' ) ); ?>',
@@ -704,8 +713,6 @@ function accw_get_settings() {
 			?: get_option( 'accw_business_email', '' ),
 		'businessContext'      => accw_get_env( 'ACCW_BUSINESS_CONTEXT' )
 			?: get_option( 'accw_business_context', '' ),
-		'businessHours'        => accw_get_env( 'ACCW_BUSINESS_HOURS' )
-			?: get_option( 'accw_business_hours', '' ),
 		'position'             => accw_get_env( 'ACCW_POSITION' )
 			?: get_option( 'accw_position', 'bottom-right' ),
 		'ariaLabelOpen'        => 'Open chat',
@@ -828,7 +835,6 @@ function accw_enqueue_assets() {
 		'businessPhone'       => $settings['businessPhone'],
 		'businessEmail'       => $settings['businessEmail'],
 		'businessContext'     => $settings['businessContext'],
-		'businessHours'       => $settings['businessHours'],
 		'position'            => $settings['position'],
 	);
 
@@ -871,6 +877,8 @@ function accw_render_widget() {
 			</svg>
 		</button>
 
+		<div class="chat-helper" id="chatHelper"></div>
+
 		<div class="chat-window" id="chatWindow" role="dialog" aria-modal="false" aria-labelledby="accwHeaderTitle">
 			<div class="chat-header">
 				<div class="logo-container">
@@ -890,7 +898,7 @@ function accw_render_widget() {
 	</div>
 	<?php
 }
-add_action( 'wp_footer', 'accw_render_widget', 100 );
+add_action( 'wp_footer', 'accw_render_widget', 10 );
 
 /**
  * Register [anchor_chatbot] if nothing else has.
@@ -991,14 +999,36 @@ function accw_render_chatbot_shortcode( $atts = array() ) {
 }
 
 /**
- * Basic safe defaults for CSS variables in case the theme does not set them.
+ * Output CSS custom properties and optional custom CSS.
  */
 function accw_root_css_vars() {
 	if ( is_admin() ) {
 		return;
 	}
-	$css = ':root{--color-accent:#6c63ff;--color-dark:#1f1f1f;}';
+
+	$accent = get_option( 'accw_accent_color', '#6c63ff' );
+	if ( ! $accent || ! preg_match( '/^#[0-9a-fA-F]{3,6}$/', $accent ) ) {
+		$accent = '#6c63ff';
+	}
+
+	// Darken the accent color by 25 % for --color-dark.
+	$hex = ltrim( $accent, '#' );
+	if ( 3 === strlen( $hex ) ) {
+		$hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+	}
+	$r = max( 0, (int) round( hexdec( substr( $hex, 0, 2 ) ) * 0.75 ) );
+	$g = max( 0, (int) round( hexdec( substr( $hex, 2, 2 ) ) * 0.75 ) );
+	$b = max( 0, (int) round( hexdec( substr( $hex, 4, 2 ) ) * 0.75 ) );
+	$dark = sprintf( '#%02x%02x%02x', $r, $g, $b );
+
+	$css = ':root{--color-accent:' . esc_attr( $accent ) . ';--color-dark:' . esc_attr( $dark ) . ';}';
 	wp_add_inline_style( 'accw-chat-widget', $css );
+
+	// Custom CSS.
+	$custom_css = get_option( 'accw_custom_css', '' );
+	if ( $custom_css ) {
+		wp_add_inline_style( 'accw-chat-widget', wp_strip_all_tags( $custom_css ) );
+	}
 }
 add_action( 'wp_enqueue_scripts', 'accw_root_css_vars', 6 );
 

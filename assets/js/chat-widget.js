@@ -144,23 +144,6 @@
 			return;
 		}
 
-		function isWithinBusinessHours(hoursStr) {
-			if (!hoursStr || typeof hoursStr !== "string") return false;
-			var parts = hoursStr.split(",").map(function (p) { return p.trim(); }).filter(Boolean);
-			if (!parts.length) return false;
-
-			var now = new Date();
-			return parts.some(function (part) {
-				var match = part.match(/^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/);
-				if (!match) return false;
-				var start = new Date(now);
-				start.setHours(parseInt(match[1], 10), parseInt(match[2], 10), 0, 0);
-				var end = new Date(now);
-				end.setHours(parseInt(match[3], 10), parseInt(match[4], 10), 0, 0);
-				return now >= start && now <= end;
-			});
-		}
-
 		containers.forEach(function (container) {
 			var messagesEl = container.querySelector("[data-accw-messages]");
 			var form = container.querySelector("[data-accw-form]");
@@ -559,11 +542,10 @@
 				});
 			}
 
-			// Render call link if within business hours and phone is present.
+			// Render call link when phone is present.
 			if (leadCall) {
 				var phone = (CFG.businessPhone || "").replace(/\D/g, "");
-				var hoursOk = isWithinBusinessHours(CFG.businessHours || "");
-				if (phone && hoursOk) {
+				if (phone) {
 					var link = leadCall.querySelector("a");
 					if (link) {
 						link.href = "tel:" + phone;
