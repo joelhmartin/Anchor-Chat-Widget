@@ -258,10 +258,14 @@
 				messagesEl.innerHTML = "";
 				if (leadBubble) {
 					leadBubble.classList.remove("is-visible");
+					messagesEl.appendChild(leadBubble);
 				}
 				if (introText) {
 					addMessage("assistant", introText);
 				}
+				leadShown = false;
+				leadSubmitted = false;
+				hasUserMessage = false;
 				input.value = "";
 				setStatus("");
 				toggleForm(!CFG.apiUrl);
