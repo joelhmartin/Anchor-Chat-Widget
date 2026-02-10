@@ -335,6 +335,7 @@
     background: #eef0f5;
     color: #1f1f1f;
     border-bottom-left-radius: 4px;
+    white-space: normal;
 }
 
 .accw-lead-bubble.is-visible {

@@ -248,7 +248,9 @@
 				if (!leadShown && normalizedRole === "assistant" && hasUserMessage) {
 					leadShown = true;
 					if (leadBubble) {
+						messagesEl.appendChild(leadBubble);
 						leadBubble.classList.add("is-visible");
+						messagesEl.scrollTop = messagesEl.scrollHeight;
 					}
 				}
 			}
@@ -258,7 +260,6 @@
 				messagesEl.innerHTML = "";
 				if (leadBubble) {
 					leadBubble.classList.remove("is-visible");
-					messagesEl.appendChild(leadBubble);
 				}
 				if (introText) {
 					addMessage("assistant", introText);
