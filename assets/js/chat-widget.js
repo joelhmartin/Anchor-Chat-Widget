@@ -3,6 +3,8 @@
 	var STR = window.ACCW_STRINGS || {};
 	var CFG = window.ACCW_CONFIG || {};
 
+	var MAX_HISTORY = 20;
+
 	function byId(id) {
 		return document.getElementById(id);
 	}
@@ -246,13 +248,26 @@
 
 				// Show lead bubble only after we have a user message and an assistant reply.
 				if (!leadShown && normalizedRole === "assistant" && hasUserMessage) {
-					leadShown = true;
-					if (leadBubble) {
-						messagesEl.appendChild(leadBubble);
-						leadBubble.classList.add("is-visible");
-						messagesEl.scrollTop = messagesEl.scrollHeight;
-					}
+					showLeadBubble();
 				}
+			}
+
+			function showLeadBubble() {
+				leadShown = true;
+				if (leadBubble) {
+					messagesEl.appendChild(leadBubble);
+					leadBubble.classList.add("is-visible");
+					messagesEl.scrollTop = messagesEl.scrollHeight;
+				}
+			}
+
+			// Create an empty bot bubble for streaming, returns the DOM element.
+			function createStreamingBubble() {
+				var bubble = document.createElement("div");
+				bubble.className = "accw-message accw-message-bot is-streaming";
+				messagesEl.appendChild(bubble);
+				messagesEl.scrollTop = messagesEl.scrollHeight;
+				return bubble;
 			}
 
 			function resetConversation() {
@@ -290,10 +305,14 @@
 				resetConversation();
 			}
 
-			// Updated to match Cloud Run ChatRequest shape
-			function sendToApi(latestMessage) {
-				// Build messages array from session history
-				var messages = session.messages.map(function (msg) {
+			function buildPayload(latestMessage) {
+				// Cap history to last MAX_HISTORY messages for API payload
+				var allMessages = session.messages;
+				var capped = allMessages.length > MAX_HISTORY
+					? allMessages.slice(allMessages.length - MAX_HISTORY)
+					: allMessages;
+
+				var messages = capped.map(function (msg) {
 					var role =
 						msg.role === "assistant"
 							? "assistant"
@@ -306,7 +325,7 @@
 					};
 				});
 
-				var payload = {
+				return {
 					sessionId: session.id,
 					clientId: CFG.clientId || "",
 					messages: messages,
@@ -324,12 +343,105 @@
 						context: CFG.businessContext || ""
 					}
 				};
+			}
 
+			function buildHeaders() {
+				var headers = {
+					"Content-Type": "application/json",
+					"Accept": "text/event-stream"
+				};
+				if (CFG.apiAuthToken) {
+					headers.Authorization = "Bearer " + CFG.apiAuthToken;
+				}
+				return headers;
+			}
+
+			// SSE streaming fetch — calls onChunk(text) for each token, onDone(fullText) when complete.
+			function sendToApiStream(text, onChunk, onDone, onError) {
+				var payload = buildPayload(text);
+				var headers = buildHeaders();
+
+				fetch(CFG.apiUrl, {
+					method: "POST",
+					headers: headers,
+					body: JSON.stringify(payload)
+				}).then(function (response) {
+					if (!response.ok) {
+						throw new Error("Chatbot API error (" + response.status + ")");
+					}
+
+					var contentType = response.headers.get("content-type") || "";
+
+					// Fallback: server returned JSON instead of SSE
+					if (contentType.indexOf("text/event-stream") === -1) {
+						return response.text().then(function (raw) {
+							var reply = "";
+							try {
+								var data = JSON.parse(raw);
+								reply = extractReply(data);
+							} catch (e) {
+								reply = raw;
+							}
+							if (!reply) throw new Error("Empty reply from chatbot");
+							onChunk(reply);
+							onDone(reply);
+						});
+					}
+
+					// SSE streaming path
+					var reader = response.body.getReader();
+					var decoder = new TextDecoder();
+					var fullText = "";
+					var sseBuffer = "";
+
+					function pump() {
+						return reader.read().then(function (result) {
+							if (result.done) {
+								onDone(fullText);
+								return;
+							}
+							sseBuffer += decoder.decode(result.value, { stream: true });
+							var lines = sseBuffer.split("\n");
+							sseBuffer = lines.pop() || "";
+
+							for (var i = 0; i < lines.length; i++) {
+								var line = lines[i].trim();
+								if (!line || !line.startsWith("data:")) continue;
+								var payload = line.slice(5).trim();
+								if (payload === "[DONE]") {
+									onDone(fullText);
+									return;
+								}
+								try {
+									var parsed = JSON.parse(payload);
+									if (parsed.error) {
+										onError(new Error(parsed.error));
+										return;
+									}
+									if (parsed.content) {
+										fullText += parsed.content;
+										onChunk(parsed.content);
+									}
+								} catch (e) {
+									// skip malformed
+								}
+							}
+							return pump();
+						});
+					}
+
+					return pump();
+				}).catch(function (err) {
+					onError(err);
+				});
+			}
+
+			// Non-streaming fallback
+			function sendToApi(latestMessage) {
+				var payload = buildPayload(latestMessage);
 				var headers = {
 					"Content-Type": "application/json"
 				};
-
-				// apiAuthToken is optional, Cloud Run does not require it but we can keep it if set
 				if (CFG.apiAuthToken) {
 					headers.Authorization = "Bearer " + CFG.apiAuthToken;
 				}
@@ -427,36 +539,62 @@
 				}
 
 				isSending = true;
-				setStatus("Sending...");
 				addMessage("user", text);
 				input.value = "";
 				toggleForm(true);
 
-				sendToApi(text)
-					.then(function (response) {
-						var reply = extractReply(response);
-						if (!reply) {
-							throw new Error("Empty reply from chatbot");
+				// Create streaming bubble upfront
+				var streamBubble = createStreamingBubble();
+				setStatus("");
+
+				sendToApiStream(
+					text,
+					// onChunk — append token to bubble
+					function (chunk) {
+						streamBubble.textContent += chunk;
+						messagesEl.scrollTop = messagesEl.scrollHeight;
+					},
+					// onDone — finalize
+					function (fullText) {
+						streamBubble.classList.remove("is-streaming");
+						if (!fullText) {
+							streamBubble.remove();
+							addMessage("system", "Something went wrong. Please try again shortly.");
+							setStatus("Empty reply from chatbot", true);
+						} else {
+							// Store in session
+							session.messages.push({
+								role: "assistant",
+								text: fullText,
+								at: new Date().toISOString()
+							});
+							// Trigger lead bubble after first assistant reply
+							if (!leadShown && hasUserMessage) {
+								showLeadBubble();
+							}
 						}
-						addMessage("assistant", reply);
 						setStatus("");
-					})
-					.catch(function (err) {
+						isSending = false;
+						toggleForm(false);
+						input.focus();
+					},
+					// onError — cleanup
+					function (err) {
+						streamBubble.classList.remove("is-streaming");
+						if (!streamBubble.textContent) {
+							streamBubble.remove();
+						}
 						console.error("[ACCW]", err);
-						addMessage(
-							"system",
-							"Something went wrong. Please try again shortly."
-						);
+						addMessage("system", "Something went wrong. Please try again shortly.");
 						setStatus(
 							err && err.message ? err.message : "Unable to reach chatbot",
 							true
 						);
-					})
-					.finally(function () {
 						isSending = false;
 						toggleForm(false);
 						input.focus();
-					});
+					}
+				);
 			});
 
 			if (endBtn) {
@@ -536,7 +674,7 @@
 					sendLeadPayload(payload)
 						.then(function () {
 							leadSubmitted = true;
-							setLeadStatus("Thanks! We’ve got your details.", false);
+							setLeadStatus("Thanks! We've got your details.", false);
 							if (leadBubble) {
 								leadBubble.classList.remove("is-visible");
 							}
