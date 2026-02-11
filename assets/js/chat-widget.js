@@ -301,8 +301,16 @@
 					console.error("[ACCW transcript]", err);
 				}
 
-				setStatus("Transcript sent. Starting a new chat.");
 				resetConversation();
+
+				// Close the widget window
+				var chatWindow = byId("chatWindow");
+				var chatToggle = byId("chatToggle");
+				if (chatWindow) chatWindow.classList.remove("open");
+				if (chatToggle) {
+					chatToggle.classList.remove("active");
+					chatToggle.setAttribute("aria-expanded", "false");
+				}
 			}
 
 			function buildPayload(latestMessage) {
